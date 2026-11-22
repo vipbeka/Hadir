@@ -1,51 +1,127 @@
 // Zintra حاضر — app entry.
-// Step 1: login screen + the two separate shells (staff, owner) with
-// preview content. Step 2 adds the Supabase session, role routing and
-// guards (staff can never land on /owner/*).
+// Auth flow: persisted Supabase session → profile read through RLS →
+// role-based routing into ONE of two separate experiences:
+//   staff → /staff/* (staff shell),  owner → /owner/* (owner console).
+// There is no role switch anywhere. The route guard only keeps people
+// in their own tree; RLS and the Edge Functions are the real enforcers.
 import { initI18n, onLangChange, t } from './core/i18n.js';
 import { initTheme } from './core/theme.js';
 import { route, fallback, startRouter, resolve, navigate, currentPath } from './core/router.js';
+import { signInWithCode, currentPerson, signOut, onAuthChange } from './core/auth.js';
+import { ApiError } from './core/api.js';
 import { renderShell } from './shell/shell.js';
-import { STAFF_NAV, OWNER_NAV } from './shell/nav.js';
+import { STAFF_NAV, OWNER_NAV, HOME } from './shell/nav.js';
 import { renderLogin } from './pages/login.js';
 import { renderPlaceholder } from './pages/placeholder.js';
+import { renderAccount } from './pages/account.js';
+import { renderEmployees } from './pages/owner/employees.js';
+import { displayName } from './core/format.js';
+import { toast } from './ui/toast.js';
+import { initPwa } from './core/pwa.js';
+import { watchUpdates } from './ui/install.js';
 
 const root = document.getElementById('app');
+let me = null;          // current profile (null when signed out)
+let loginNotice = null; // message to show on the login screen
 
-// Preview identities (illustrative only; replaced by the real profile in Step 2)
-const PREVIEW_USERS = {
-  staff: { name: 'Ahmed Ali', roleKey: 'role.staff' },
-  owner: { name: 'Zintra Owner', roleKey: 'role.owner' },
+const PAGES = {
+  '/staff/account': renderAccount,
+  '/owner/account': renderAccount,
+  '/owner/employees': renderEmployees,
 };
 
-function mountTree(nav, user) {
+async function doSignOut(notice = 'login.signedOut') {
+  await signOut();
+  me = null;
+  loginNotice = notice;
+  navigate('/login', { replace: true });
+}
+
+function guard(path) {
+  if (!me) return '/login';
+  const tree = me.role === 'owner' ? '/owner/' : '/staff/';
+  return path.startsWith(tree) ? null : HOME[me.role];
+}
+
+function mountTree(nav) {
   nav.forEach((item, idx) => {
     route(item.path, (path) => {
-      const { main } = renderShell(root, { nav, currentPath: path, user, onSignOut: () => navigate('/login') });
-      renderPlaceholder(main, { item, user, isHome: idx === 0 });
+      const redirect = guard(path);
+      if (redirect) { navigate(redirect, { replace: true }); return; }
+      const user = { name: displayName(me), roleKey: `role.${me.role}` };
+      const { main } = renderShell(root, { nav, currentPath: path, user, onSignOut: () => doSignOut() });
+      const page = PAGES[path];
+      if (page) page(main, { me, onSignOut: () => doSignOut() });
+      else renderPlaceholder(main, { item, user, isHome: idx === 0 });
       window.scrollTo(0, 0);
     });
   });
 }
 
+function loginErrorKey(err) {
+  if (err instanceof ApiError) {
+    if (err.code === 'locked_out') return ['login.errorLocked', { min: Math.max(1, Math.ceil((err.retry_after_s || 900) / 60)) }];
+    if (err.code === 'network' || err.code === 'offline') return ['login.errorNetwork'];
+  }
+  return ['login.errorGeneric'];
+}
+
 async function boot() {
+  initPwa();
   initTheme();
   await initI18n();
-  route('/login', () => renderLogin(root));
-  mountTree(STAFF_NAV, PREVIEW_USERS.staff);
-  mountTree(OWNER_NAV, PREVIEW_USERS.owner);
-  fallback(() => navigate('/login', { replace: true }));
-  onLangChange(() => {
-    const path = currentPath();
-    resolve();
-    // keep keyboard users on the language switcher after re-render
-    const sw = document.querySelector(`.segmented__btn[lang="${document.documentElement.lang}"]`);
-    if (sw && path) sw.focus({ preventScroll: true });
+
+  route('/login', () => {
+    if (me) { navigate(HOME[me.role], { replace: true }); return; }
+    renderLogin(root, {
+      notice: loginNotice ? t(loginNotice) : null,
+      onSubmit: async (code) => {
+        try {
+          await signInWithCode(code);
+          me = await currentPerson();
+          if (!me) throw new ApiError('code_not_recognized', 401);
+          loginNotice = null;
+          navigate(HOME[me.role], { replace: true });
+        } catch (err) {
+          const [key, vars] = loginErrorKey(err);
+          const e = new Error(key); e.messageKey = key; e.vars = vars; throw e;
+        }
+      },
+    });
+    loginNotice = null;
   });
+  mountTree(STAFF_NAV);
+  mountTree(OWNER_NAV);
+  fallback(() => navigate(me ? HOME[me.role] : '/login', { replace: true }));
+
+  // Restore a persisted session (no code prompt on reopen).
+  try { me = await currentPerson(); } catch { me = null; }
+  if (!me) await signOut();
+
+  // Server-side revocation/deactivation: refresh fails or RLS returns no
+  // profile → back to the login screen with a calm message.
+  onAuthChange(async (event) => {
+    if (event === 'SIGNED_OUT' && me) { me = null; loginNotice = 'login.sessionEnded'; navigate('/login', { replace: true }); }
+  });
+  window.addEventListener('focus', async () => {
+    if (!me) return;
+    try {
+      const still = await currentPerson();
+      if (!still) await doSignOut('login.sessionEnded');
+    } catch { /* offline: keep the UI, retry on next focus */ }
+  });
+
+  onLangChange(() => {
+    resolve();
+    document.querySelector(`.segmented__btn[lang="${document.documentElement.lang}"]`)?.focus({ preventScroll: true });
+  });
+  window.addEventListener('offline', () => toast({ title: t('status.offline'), tone: 'warning' }));
+  if (!currentPath() || currentPath() === '/') navigate(me ? HOME[me.role] : '/login', { replace: true });
+  watchUpdates();
   startRouter();
 }
 
 boot().catch((err) => {
   console.error(err);
-  root.textContent = t?.('error.text') || 'Something went wrong.';
+  root.textContent = 'Something went wrong. / حدث خطأ.';
 });

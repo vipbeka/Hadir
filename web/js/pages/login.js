@@ -1,6 +1,6 @@
 // Login screen: one numeric code field, no email/username.
-// Step 1 renders and validates the form only; the server call (login
-// Edge Function → Supabase session) is wired in Step 2.
+// The code is sent once to the login Edge Function (via onSubmit) and is
+// cleared from the field afterwards; it is never stored client-side.
 import { h, clear } from '../core/dom.js';
 import { t, setDocumentTitle } from '../core/i18n.js';
 import { input, setFieldError } from '../ui/field.js';
@@ -8,10 +8,12 @@ import { button, setLoading } from '../ui/button.js';
 import { brandName, logoLarge } from '../ui/brand.js';
 import { langSwitcher, themeToggle } from '../ui/prefs.js';
 import { toast } from '../ui/toast.js';
+import { alert } from '../ui/display.js';
+import { installBanner } from '../ui/install.js';
 
 const CODE_RE = /^\d{6,12}$/;
 
-export function renderLogin(root, { onSubmit } = {}) {
+export function renderLogin(root, { onSubmit, notice } = {}) {
   clear(root);
   document.body.classList.remove('has-bottombar');
   setDocumentTitle(t('login.title'));
@@ -52,8 +54,10 @@ export function renderLogin(root, { onSubmit } = {}) {
     try {
       if (onSubmit) await onSubmit(code);
       else toast({ title: t('login.title'), text: t('login.notConnected'), tone: 'info' });
-    } catch {
-      setFieldError(codeField, t('login.errorGeneric'));
+    } catch (err) {
+      // one generic message for any wrong code; lockout/network get their own calm text
+      setFieldError(codeField, t(err?.messageKey || 'login.errorGeneric', err?.vars));
+      codeInput.focus();
     } finally {
       setLoading(submit, false);
       codeInput.value = '';   // never keep the code around in the DOM
@@ -71,8 +75,10 @@ export function renderLogin(root, { onSubmit } = {}) {
           logoLarge(),
           h('h1', { class: 'auth__wordmark' }, brandName()),
           h('p', { class: 'auth__company' }, t('app.tagline'))),
+        notice ? alert(notice, { tone: 'info' }) : null,
         h('div', { class: 'card' }, h('h2', { class: 'visually-hidden' }, t('login.title')), form),
-        h('p', { class: 'auth__footnote' }, t('login.footnote'))),
+        h('p', { class: 'auth__footnote' }, t('login.footnote')),
+        installBanner()),
       h('div', { class: 'auth__prefs' }, langSwitcher(), themeToggle({ compact: true })))));
   codeInput.focus({ preventScroll: true });
 }

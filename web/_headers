@@ -1,0 +1,20 @@
+# Security headers for static hosts that read a _headers file
+# (Netlify, Cloudflare Pages). Other hosts: set the same headers in their config.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.tile.openstreetmap.org; font-src 'self'; connect-src 'self' https://hppcujuplyjkuaxwmjhk.supabase.co; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: geolocation=(self), camera=(), microphone=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+/index.html
+  Cache-Control: no-cache
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
+  Content-Type: application/manifest+json
+/i18n/*
+  Cache-Control: no-cache
+/js/*
+  Cache-Control: no-cache

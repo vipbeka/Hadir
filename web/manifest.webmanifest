@@ -1,18 +1,31 @@
 {
+  "id": "./",
   "name": "Zintra حاضر",
   "short_name": "Zintra حاضر",
-  "description": "Zintra حاضر — الحضور والنقاط والمكافآت لفريق زينترا",
+  "description": "الحضور والنقاط والمكافآت لفريق زينترا — Attendance, points and rewards for the Zintra team",
   "lang": "ar",
   "dir": "auto",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#020B1F",
-  "theme_color": "#0245A0",
+  "theme_color": "#020B1F",
+  "categories": ["business", "productivity"],
+  "prefer_related_applications": false,
   "icons": [
     { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "الحضور · Attendance", "short_name": "الحضور", "url": "./index.html#/staff/attendance", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "نقاطي · My points", "short_name": "نقاطي", "url": "./index.html#/staff/points", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ],
+  "screenshots": [
+    { "src": "assets/screenshots/narrow-login.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "تسجيل الدخول برمز شخصي" },
+    { "src": "assets/screenshots/narrow-home.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "الرئيسية وتقدّم المكافأة" },
+    { "src": "assets/screenshots/wide-employees.png", "sizes": "1280x800", "type": "image/png", "form_factor": "wide", "label": "إدارة الموظفين" }
   ]
 }

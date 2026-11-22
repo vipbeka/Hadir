@@ -4,6 +4,7 @@ import { h } from '../core/dom.js';
 import { t, setDocumentTitle } from '../core/i18n.js';
 import { pageHeader } from '../shell/shell.js';
 import { card, stat, badge, progress, emptyState, alert } from '../ui/display.js';
+import { installBanner } from '../ui/install.js';
 
 export function renderPlaceholder(main, { item, user, isHome }) {
   setDocumentTitle(t(item.labelKey));
@@ -14,6 +15,7 @@ export function renderPlaceholder(main, { item, user, isHome }) {
   }));
   if (isHome) {
     main.append(
+      installBanner(),
       alert(t('shell.previewNotice'), { tone: 'info' }),
       h('div', { class: 'grid-auto' },
         card({ body: stat({ label: t('design.statDays'), value: '14', meta: t('design.statMeta') }) }),

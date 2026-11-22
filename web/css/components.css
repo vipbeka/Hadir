@@ -534,3 +534,62 @@
 /* Leading icon inside a segmented group (e.g. globe in the language switcher) */
 .segmented > .icon { align-self: center; margin-inline: var(--space-2) var(--space-1); color: var(--color-text-muted); }
 .segmented__btn[aria-busy="true"] { cursor: progress; opacity: 0.7; }
+
+/* =============================== One-time code reveal =============================== */
+.code-reveal__wrap { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); }
+.code-reveal {
+  display: block;
+  padding: var(--space-4);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.12em;
+  color: var(--color-text);
+  background: var(--color-surface-sunken);
+  border: var(--border-width) dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  user-select: all;
+}
+
+/* =============================== Toolbar + detail sections =============================== */
+.toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; justify-content: space-between; }
+.toolbar__search { flex: 1 1 16rem; max-inline-size: 28rem; }
+.detail-section { display: flex; flex-direction: column; gap: var(--space-3); padding-block: var(--space-4); border-block-start: var(--border-width) solid var(--color-border); }
+.detail-section:first-child { border-block-start: 0; padding-block-start: 0; }
+.detail-section__title { font-size: var(--font-size-md); font-weight: var(--font-weight-semibold); }
+.form-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+.session-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.session-item {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+.session-item__meta { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; font-size: var(--font-size-sm); }
+.session-item__title { font-weight: var(--font-weight-semibold); }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-4); font-size: var(--font-size-sm); }
+.kv dt { color: var(--color-text-muted); }
+.kv dd { margin: 0; font-weight: var(--font-weight-medium); }
+.name-cell { display: flex; flex-direction: column; }
+.name-cell__alt { font-size: var(--font-size-xs); color: var(--color-text-muted); }
+
+/* =============================== Install (PWA) =============================== */
+.install-slot:empty { display: none; }
+.install-card {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-inline-start: 4px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.install-card__icon { inline-size: var(--space-12); block-size: var(--space-12); border-radius: var(--radius-md); flex: none; }
+.install-card__text { flex: 1 1 12rem; min-inline-size: 0; }
+.install-card__title { font-weight: var(--font-weight-semibold); }
+.install-card__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.install-steps { display: flex; flex-direction: column; gap: var(--space-4); padding: 0; list-style: none; counter-reset: step; }
+.install-steps li { display: flex; align-items: center; gap: var(--space-3); }
+.install-steps li > .icon { inline-size: var(--icon-size-lg); block-size: var(--icon-size-lg); color: var(--color-accent-text); flex: none; }

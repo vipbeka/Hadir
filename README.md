@@ -4,7 +4,7 @@
 
 Staff attendance, points and rewards for **زينترا / Zintra**: location-checked check-in and check-out, a points system with green, red and black points, a monthly green reward, leave and early-leave requests, Telegram alerts for the owner, and monthly payroll-ready reports.
 
-> Status: **Step 1 done (design system and app shell).** Later steps add the Supabase backend, auth, attendance, points, jobs and reports. This README grows with each step.
+> Status: **Step 1 done (design system and app shell). Step 2 in progress** (data model, code login, roles, employee management). This README grows with each step.
 
 ## Stack
 
@@ -33,6 +33,92 @@ web/                     static site root (deploy this folder)
 tools/                   quality checks (contrast, token lint, UI matrix, keyboard)
 ```
 
+## Backend (Supabase)
+
+```
+supabase/config.toml        CLI config (public sign-up OFF; functions do their own auth)
+supabase/migrations/        versioned schema (apply in order)
+supabase/rollback/          matching *.down.sql files (see supabase/rollback/README.md)
+supabase/tests/rls_test.sql RLS/privilege tests (run inside a rolled-back transaction)
+supabase/functions/         Edge Functions (Deno): login, owner-employees, bootstrap
+```
+
+### Data model highlights
+- **Profiles and roles.** Each person has a `profiles` row with role `owner` or `staff`. The role is also copied into `app_metadata.role` for routing, but the database row is what counts. Every Auth user has a made-up internal email (`<uuid>@staff.invalid`) that is never shown and never used to sign in.
+- **Row Level Security on every table.**
+  - **Who counts as signed in.** A request is accepted only if the JWT is valid, the profile is active, and the JWT's `session_id` still exists in `auth.sessions`. So revoking a session, regenerating a code or deactivating someone takes effect on the very next request.
+  - **Who sees what.** Staff read only their own rows. The owner reads everything.
+  - **How data changes.** Writes go through Edge Functions to `svc_*` SQL functions. Only the service role can execute these; browser roles can't.
+- **Salaries are owner-only.** `employee_salaries` has no staff policy of any kind.
+- **Credential tables are server-only.** `login_codes` (bcrypt hashes only) and `login_attempts` (HMAC'd client identifiers only) can't be read by any browser session, not even the owner's.
+- **Point counters are derived.** Totals come from active `point_events` through `v_point_totals`; pending or declined events never count.
+- **Money is stored in integer piastres.** 1 EGP = 100 piastres.
+
+### Provisioning
+- **Supabase MCP (preferred).** Connect with `/mcp` (browser OAuth, scoped to this project, development branch first). No personal access token is needed. Migrations, functions and SQL are applied through the MCP from the versioned files in this repo.
+- **Supabase CLI (fallback):**
+  ```bash
+  supabase link --project-ref <ref>       # confirm the ref first
+  supabase db push                        # applies supabase/migrations
+  supabase functions deploy login --no-verify-jwt
+  supabase functions deploy owner-employees --no-verify-jwt
+  supabase functions deploy bootstrap --no-verify-jwt
+  ```
+- **Local development (needs Docker):** `supabase start`, then `supabase db reset` (migrations + `seed.sql`), then `supabase functions serve`.
+- **Migration test without Docker:** `tools/sql-test/run.sh` applies the migrations to a scratch Postgres with Supabase `auth` stubs, runs the RLS tests, runs the rollback, and applies the migrations again.
+
+### Required Auth settings (Dashboard → Authentication)
+- **Sign In / Providers:** turn off "Allow new users to sign up". Keep the Email provider enabled, because the login function uses it to create sessions. Accounts are created only by the owner through `owner-employees`.
+- **Sessions:**
+  - **Access tokens:** JWT expiry 3600 s; supabase-js refreshes them silently.
+  - **Refresh tokens:** they don't expire by default, so a session lasts until logout or revocation. That meets the "at least 30 days" requirement.
+  - **Time-box / inactivity timeout:** optional and needs a paid plan. If enabled, set it to 30 days or more.
+
+### Code-only login: security trade-off
+Signing in with a code alone is convenient: one number, no email account, nothing else to remember. It is also weaker than an identifier plus a password, because everyone's code comes from the same numeric space. These controls are therefore mandatory and must not be weakened for convenience:
+
+- **Codes:**
+  - Each code is a random 8-digit number by default, configurable from 6 to 12. It comes from a cryptographically secure generator with rejection sampling to avoid bias, and is unique among current codes.
+  - Codes are stored only as salted bcrypt hashes and verified only in the `login` Edge Function. The function compares the submitted code against every stored hash, so timing doesn't reveal a match.
+- **Failures:** every failure gets the same generic message, padded to a similar response time.
+- **Lockout:**
+  - A device or IP is locked out after 5 failures within 15 minutes. The lock lasts 15 minutes, then 1 hour, then 24 hours for repeat offenders.
+  - A global throttle kicks in at 50 failures per hour across all clients.
+  - The owner gets a Telegram alert, which never contains a submitted code.
+  - All thresholds are editable in `settings`.
+- **Code display:** a code is shown once to the owner when it is created or regenerated, then never again. It never appears in logs, the audit log, the notification outbox, Telegram messages, URLs or browser storage.
+
+### Sessions (design choice B)
+After a code matches, the `login` function creates a real Supabase session for that person's Auth user. It calls `admin.generateLink` with type magiclink, then completes `verifyOtp` on the server. No email is sent, and the user has no password. The browser installs the session with `setSession`.
+
+We chose this over hand-made JWTs because Supabase already handles refresh-token rotation, `auth.uid()` for RLS, and per-session revocation. Sign-out ends only this device's session. The owner can list and revoke sessions per employee.
+
+### Initial owner code
+The owner code is never shown in a terminal, a log or chat. It comes back encrypted to a key that exists only on the developer's machine.
+
+```bash
+node tools/bootstrap/prepare.mjs owner      # makes a key + one-time token in .secrets/, prints only public values
+# run the printed SQL to insert the token hash (expires in 15 min)
+# call the bootstrap function: POST /functions/v1/bootstrap
+#   {"token": <contents of .secrets/bootstrap-token.txt>, "purpose": "owner",
+#    "public_key_jwk": <printed public key>, "owner_name_ar": "...", "owner_name_en": "..."}
+# save the JSON response to a file, then:
+node tools/bootstrap/open.mjs response.json # writes .secrets/owner-code.txt (never printed)
+```
+
+After signing in, the owner should regenerate their code from **My account** and delete the file. If the owner code is lost, a developer runs the same procedure; the `owner` purpose works only while no owner exists. Otherwise, another owner regenerates it from Employees. `purpose: "seed_staff"` creates three demo staff accounts for development.
+
+### Secrets (names only, never values)
+| Name | Where | Used by |
+|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` | provided by the platform to Edge Functions | all functions |
+| `TELEGRAM_BOT_TOKEN` | Dashboard → Edge Functions → Secrets (Step 5) | Telegram sender / webhook |
+| `VAPID_PRIVATE_KEY` | Dashboard → Edge Functions → Secrets (Step 5) | web push job |
+| `LOGIN_HASH_PEPPER` (optional) | Dashboard → Edge Functions → Secrets | HMAC key for attempt identifiers (defaults to a service-key-derived key) |
+| `ALLOWED_ORIGINS` (optional) | Dashboard → Edge Functions → Secrets | CORS allow-list for the static site origin |
+
+Secret values are entered only in the Dashboard. They never go in chat, MCP arguments, command lines, git or logs. The browser gets only the project URL and the publishable key (`web/js/config.js`).
+
 ## Run locally
 
 ```bash
@@ -50,7 +136,30 @@ npm run check:tokens     # no raw colors / font sizes / px spacing outside token
 npm run check:contrast   # every shipped text/background pair passes WCAG AA, both themes
 npm run check:ui         # 6 pages x 360/1440 px x ar/en x light/dark: no console errors, no overflow
 npm run check:keyboard   # tab order + visible focus, keyboard language switch, modal/drawer focus
+npm run check:auth       # login/guards/code-once/employees flows (MOCKED backend)
+npm run check:sql        # migrations + RLS tests + rollback on a scratch Postgres
+npm run check:deno       # Edge Function unit tests (code generation, hashing, matching)
 ```
+
+`ui-check`, `keyboard-check` and `check:auth` replace the Supabase API with a mock (`tools/mock-backend.mjs`), so they test the UI without a network. Real-backend behaviour is checked separately against the project.
+
+## Installable app (PWA)
+- **Manifest:** `manifest.webmanifest` provides:
+  - the name "Zintra حاضر" and standalone display;
+  - brand icons, including a maskable one;
+  - shortcuts to Attendance and My points;
+  - screenshots for the richer install dialog.
+- **Service worker (`sw.js`):**
+  - It precaches the app shell, so the installed app opens instantly.
+  - Navigations try the network first, with an offline fallback.
+  - It **never** caches Supabase/API calls.
+  - New versions wait until the user taps "Update".
+  - Bump `VERSION` in `sw.js` on each deploy.
+- **Install UI:**
+  - Android and desktop Chrome/Edge get an install card and button.
+  - iPhone and iPad get the "Share → Add to Home Screen" steps, because Safari has no install prompt.
+  - It is hidden once installed, and "Not now" is remembered.
+- **Testing:** `node tools/pwa-check.mjs` checks Chromium's installability criteria, that every precached file exists, and offline start-up.
 
 ## Brand and design notes
 

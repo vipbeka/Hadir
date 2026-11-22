@@ -39,6 +39,9 @@ const PATHS = {
   copy: ['rect:8,8,13,13', 'M16 8V4H3v13h5'],
   bell: ['M6 16V11a6 6 0 0 1 12 0v5l2 2H4Z', 'M10 21h4'],
   briefcase: ['rect:3,7,18,13', 'M8 7V4h8v3', 'M3 13h18'],
+  share: ['M12 3v12', 'M8 7l4-4 4 4', 'M5 11v9h14v-9'],
+  plusSquare: ['rect:3,3,18,18', 'M12 8v8', 'M8 12h8'],
+  download: ['M12 4v11', 'M7 10l5 5 5-5', 'M5 20h14'],
 };
 
 function build(spec) {

@@ -1,0 +1,24 @@
+# Deploys web/ to Firebase Hosting (project hadar-ee191).
+# Runs on demand (Actions → "Deploy to Firebase Hosting" → Run workflow)
+# and on every push to main.
+# One-time setup: add the GitHub secret FIREBASE_SERVICE_ACCOUNT_HADAR
+# (Firebase console → Project settings → Service accounts → Generate new
+# private key → paste the whole JSON as the secret value). Never commit it.
+name: Deploy to Firebase Hosting
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HADAR }}
+          projectId: hadar-ee191
+          channelId: live

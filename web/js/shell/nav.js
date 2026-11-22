@@ -17,4 +17,7 @@ export const OWNER_NAV = [
   { path: '/owner/payroll', labelKey: 'nav.payroll', icon: 'fileText' },
   { path: '/owner/holidays', labelKey: 'nav.holidays', icon: 'calendar' },
   { path: '/owner/settings', labelKey: 'nav.settings', icon: 'settings' },
+  { path: '/owner/account', labelKey: 'nav.account', icon: 'user' },
 ];
+
+export const HOME = { staff: STAFF_NAV[0].path, owner: OWNER_NAV[0].path };

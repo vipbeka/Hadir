@@ -8,6 +8,7 @@ import { icon } from '../ui/icons.js';
 import { button } from '../ui/button.js';
 import { wordmark } from '../ui/brand.js';
 import { langSwitcher, themeToggle } from '../ui/prefs.js';
+import { installButton } from '../ui/install.js';
 
 const BOTTOM_MAX = 4; // first 4 items in the bottom bar; the rest go to "More"
 
@@ -47,6 +48,7 @@ export function renderShell(root, { nav, currentPath, user, onSignOut }) {
     h('nav', { class: 'nav', 'aria-label': t('nav.primary') }, nav.map((i) => navLink(i, currentPath, 'nav__link'))),
     h('div', { class: 'sidebar__footer' },
       h('div', { class: 'sidebar__prefs' }, langSwitcher(), themeToggle({ compact: true })),
+      installButton({ variant: 'ghost', block: true }),
       userChip, signOut));
 
   // ----- mobile drawer ("More") -----
@@ -59,6 +61,7 @@ export function renderShell(root, { nav, currentPath, user, onSignOut }) {
       nav.length > BOTTOM_MAX ? h('nav', { class: 'nav', 'aria-label': t('common.more') }, overflow.map((i) => navLink(i, currentPath, 'nav__link'))) : null,
       h('div', { class: 'drawer__group' }, h('span', { class: 'drawer__label' }, t('lang.label')), langSwitcher()),
       h('div', { class: 'drawer__group' }, h('span', { class: 'drawer__label' }, t('theme.label')), themeToggle()),
+      installButton({ variant: 'primary', block: true }),
       userChip ? userChip.cloneNode(true) : null,
       drawerSignOut));
   drawer.addEventListener('click', (e) => { if (e.target === drawer || e.target.closest('a')) closeDrawer(); });

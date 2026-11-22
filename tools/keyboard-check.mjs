@@ -3,6 +3,7 @@
 // opens/closes with keyboard and returns focus; drawer opens on mobile.
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)('playwright');
+import { installMock, uiLogin } from './mock-backend.mjs';
 const base = process.argv[2] || 'http://127.0.0.1:8787';
 const browser = await chromium.launch();
 let fail = 0;
@@ -53,8 +54,12 @@ for (const lang of ['ar', 'en']) {
   // ---- shell (desktop) ----
   ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await ctx.addInitScript((l) => localStorage.setItem('zh.lang', l), lang);
+  await installMock(ctx);
   page = await ctx.newPage();
-  await page.goto(`${base}/index.html#/owner/dashboard`, { waitUntil: 'networkidle' });
+  await uiLogin(page, base, '87654321');
+  await page.waitForFunction(() => location.hash === '#/owner/dashboard');
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.evaluate(() => document.activeElement?.blur());
   const sw = await tabWalk(page, 14);
   check(sw[0]?.tag === 'a' && /content|المحتوى/i.test(sw[0].text), `[${lang}] skip link is first tab stop`);
   check(sw.filter((w) => !w.visibleRing).length === 0, `[${lang}] shell: every focused control shows a focus ring (${sw.length} stops)`);
@@ -68,8 +73,11 @@ for (const lang of ['ar', 'en']) {
   // ---- drawer (phone) ----
   ctx = await browser.newContext({ viewport: { width: 360, height: 800 } });
   await ctx.addInitScript((l) => localStorage.setItem('zh.lang', l), lang);
+  await installMock(ctx);
   page = await ctx.newPage();
-  await page.goto(`${base}/index.html#/owner/dashboard`, { waitUntil: 'networkidle' });
+  await uiLogin(page, base, '87654321');
+  await page.waitForFunction(() => location.hash === '#/owner/dashboard');
+  await page.waitForTimeout(200);
   await page.focus('.topbar .btn');
   await page.keyboard.press('Enter');
   check(await page.evaluate(() => document.querySelector('.drawer').open), `[${lang}] mobile drawer opens from keyboard`);

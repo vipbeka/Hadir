@@ -5,6 +5,7 @@
 // Usage: node tools/ui-check.mjs [baseUrl] [--shots dir]
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)('playwright'); // global install (NODE_PATH)
+import { installMock, uiLogin } from './mock-backend.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -13,13 +14,16 @@ const shotsIdx = process.argv.indexOf('--shots');
 const shotsDir = shotsIdx > 0 ? process.argv[shotsIdx + 1] : null;
 if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
 
+// [name, url, login code (mock backend) or null]
 const pages = [
-  ['login', '/index.html#/login'],
-  ['staff-home', '/index.html#/staff/home'],
-  ['staff-points', '/index.html#/staff/points'],
-  ['owner-dashboard', '/index.html#/owner/dashboard'],
-  ['owner-settings', '/index.html#/owner/settings'],
-  ['design', '/design/index.html'],
+  ['login', '/index.html#/login', null],
+  ['staff-home', '/index.html#/staff/home', '12345678'],
+  ['staff-account', '/index.html#/staff/account', '12345678'],
+  ['owner-dashboard', '/index.html#/owner/dashboard', '87654321'],
+  ['owner-employees', '/index.html#/owner/employees', '87654321'],
+  ['owner-employee-dialog', '/index.html#/owner/employees', '87654321'],
+  ['owner-account', '/index.html#/owner/account', '87654321'],
+  ['design', '/design/index.html', null],
 ];
 const widths = [360, 1440];
 const langs = ['ar', 'en'];
@@ -27,7 +31,7 @@ const themes = ['light', 'dark'];
 
 const browser = await chromium.launch();
 let failures = 0;
-for (const [name, url] of pages) {
+for (const [name, url, code] of pages) {
   for (const width of widths) {
     for (const lang of langs) {
       for (const theme of themes) {
@@ -39,8 +43,15 @@ for (const [name, url] of pages) {
         page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
         page.on('requestfailed', (r) => problems.push(`requestfailed: ${r.url()}`));
         page.on('response', (r) => { if (r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
+        await installMock(ctx);
+        if (code) { await uiLogin(page, base, code); await page.waitForFunction(() => !location.hash.includes('login')); }
         await page.goto(base + url, { waitUntil: 'networkidle' });
-        await page.waitForTimeout(150);
+        await page.waitForTimeout(250);
+        if (name === 'owner-employee-dialog') {
+          await page.locator('tbody tr').nth(1).locator('button').click();
+          await page.waitForSelector('.session-item');
+          await page.waitForTimeout(300);
+        }
         const info = await page.evaluate(() => {
           const de = document.documentElement;
           const vw = de.clientWidth;
