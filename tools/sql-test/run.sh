@@ -16,10 +16,12 @@ if [ "$(id -u)" = 0 ]; then chown postgres "$WORK"; AS=(runuser -u postgres --);
 trap '"${AS[@]}" "$PGBIN/pg_ctl" -D "$WORK/data" stop -m fast >/dev/null; rm -rf "$WORK"' EXIT
 PSQL=(psql -h "$WORK" -p $PORT -U postgres -d postgres -v ON_ERROR_STOP=1 -q -X)
 "${PSQL[@]}" -f "$ROOT/tools/sql-test/supabase_stub.sql" >/dev/null
-up() { for f in "$ROOT"/supabase/migrations/*.sql; do "${PSQL[@]}" -f "$f" >/dev/null; done; }
-down() { for f in $(ls "$ROOT"/supabase/rollback/*.down.sql | sort -r); do "${PSQL[@]}" -f "$f" >/dev/null; done; }
+# files marked "-- @remote-only" need hosted extensions (pg_net, pg_cron, vault)
+up() { for f in "$ROOT"/supabase/migrations/*.sql; do grep -q -- '-- @remote-only' "$f" && continue; "${PSQL[@]}" -f "$f" >/dev/null; done; }
+down() { for f in $(ls "$ROOT"/supabase/rollback/*.down.sql | sort -r); do grep -q -- '-- @remote-only' "$f" && continue; "${PSQL[@]}" -f "$f" >/dev/null; done; }
 echo "== apply migrations"; up
 echo "== RLS tests"; { echo "begin;"; cat "$ROOT/supabase/tests/rls_test.sql"; echo "rollback;"; } | "${PSQL[@]}" 2>&1 | grep -E "ok:|PASSED|FAILED|ERROR" | sed 's/^NOTICE:  //'
+echo "== engine tests"; { echo "begin;"; cat "$ROOT/supabase/tests/engine_test.sql"; echo "rollback;"; } | "${PSQL[@]}" 2>&1 | grep -E "ok:|PASSED|FAILED|ERROR" | sed 's/^NOTICE:  //'
 echo "== rollback"; down
 "${PSQL[@]}" -tAc "select 'tables left in public: ' || count(*) from information_schema.tables where table_schema='public'"
 echo "== re-apply"; up
