@@ -1,0 +1,14 @@
+{
+  "name": "zintra-hadir",
+  "private": true,
+  "description": "Zintra حاضر — staff attendance, points and rewards",
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8787 --bind 127.0.0.1 --directory web",
+    "check:contrast": "node tools/check-contrast.mjs",
+    "check:tokens": "node tools/lint-tokens.mjs",
+    "check:ui": "node tools/ui-check.mjs http://127.0.0.1:8787",
+    "check:keyboard": "node tools/keyboard-check.mjs http://127.0.0.1:8787",
+    "check": "npm run check:tokens && npm run check:contrast && npm run check:ui && npm run check:keyboard"
+  }
+}

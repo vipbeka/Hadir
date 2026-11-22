@@ -1,0 +1,9 @@
+# secrets — never committed (VAPID private key file lives here temporarily)
+.secrets/
+.env
+.env.*
+supabase/.temp/
+supabase/.branches/
+node_modules/
+.DS_Store
+*.log

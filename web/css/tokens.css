@@ -1,0 +1,364 @@
+/*
+ * Zintra حاضر — design tokens
+ * ---------------------------------------------------------------
+ * The ONLY place colors, spacing, type, radii, shadows, z-index and
+ * motion values are defined. Every other stylesheet references these
+ * custom properties; no ad-hoc values elsewhere.
+ *
+ * Palette source of truth: assets/brand/zintra-logo-source.png
+ *   brand blue  #0245A0 / #023F9C / #023588
+ *   deep navy   #011B5A / #011E5C
+ *   cyan/teal   #0CE4EF (bright) / #02B0C8 (main)
+ *   gold        #E4AF48 / #B97D25 / #FAEF9D  (rewards only)
+ *
+ * Contrast: every text/background pair shipped is checked by
+ * tools/check-contrast.mjs (WCAG AA: 4.5:1 text, 3:1 large text
+ * and UI boundaries). Bright cyan and gold are accent/large-element
+ * colors on light surfaces; text-safe variants exist for small text.
+ *
+ * Themes: the light theme lives on :root; the dark theme overrides
+ * on :root[data-theme="dark"]. js/core/theme.js always resolves the
+ * user's choice (system | light | dark) to a concrete data-theme.
+ */
+
+/* ---------- Font faces (self-hosted, OFL — see assets/fonts) ---------- */
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url(../assets/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url(../assets/fonts/ibm-plex-sans-arabic-arabic-500-normal.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url(../assets/fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url(../assets/fonts/ibm-plex-sans-arabic-arabic-700-normal.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url(../assets/fonts/ibm-plex-sans-arabic-latin-400-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url(../assets/fonts/ibm-plex-sans-arabic-latin-500-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url(../assets/fonts/ibm-plex-sans-arabic-latin-600-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url(../assets/fonts/ibm-plex-sans-arabic-latin-700-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  color-scheme: light;
+
+  /* ---------- Raw brand palette (do not use directly in components) ---------- */
+  --brand-blue: #0245A0;
+  --brand-blue-hover: #023F9C;
+  --brand-blue-pressed: #023588;
+  --brand-navy: #011B5A;
+  --brand-navy-2: #011E5C;
+  --brand-cyan-bright: #0CE4EF;
+  --brand-cyan: #02B0C8;
+  --brand-gold: #E4AF48;
+  --brand-gold-dark: #B97D25;
+  --brand-gold-shine: #FAEF9D;
+  --brand-black: #000204;
+  --brand-night: #020B1F;
+  /* Text that always sits on the near-black brand base (login hero), in both themes */
+  --color-on-brand-dark: #E6ECF8;
+  --color-on-brand-dark-muted: #A9B7D6;
+
+  /* ---------- Semantic surfaces & text (light) ---------- */
+  --color-bg: #F4F7FC;                 /* page background */
+  --color-surface: #FFFFFF;            /* cards, dialogs, tables */
+  --color-surface-sunken: #EBF0F8;     /* wells, table header, skeleton base */
+  --color-surface-raised: #FFFFFF;     /* popovers, toasts */
+  --color-surface-inverse: #0B1530;    /* tooltips */
+  --color-border: #D3DCEB;             /* decorative dividers */
+  --color-border-strong: #7586A8;      /* form-control boundaries (3:1) */
+  --color-text: #0B1530;
+  --color-text-muted: #4A5878;
+  --color-text-subtle: #5A6784;        /* placeholders, captions (still ≥4.5:1) */
+  --color-text-inverse: #E6ECF8;
+  --color-text-on-primary: #FFFFFF;
+  --color-scrim: rgb(1 27 90 / 0.48);  /* modal backdrop, navy-tinted */
+
+  /* ---------- Primary action (brand blue) ---------- */
+  --color-primary: var(--brand-blue);
+  --color-primary-hover: var(--brand-blue-hover);
+  --color-primary-pressed: var(--brand-blue-pressed);
+  --color-primary-text: var(--brand-blue);   /* primary-colored text/icons on surfaces (secondary buttons) */
+  --color-primary-subtle: #E3ECFA;     /* tinted bg for secondary/ghost hover */
+  --color-primary-subtle-hover: #D3E1F7;
+  --color-link: var(--brand-blue);
+  --color-link-hover: var(--brand-blue-pressed);
+
+  /* ---------- Accent (cyan/teal): highlights, focus, active nav, progress ---------- */
+  --color-accent: var(--brand-cyan);
+  --color-accent-strong: var(--brand-cyan-bright);
+  --color-accent-text: #00788A;        /* text-safe cyan on light surfaces */
+  --color-accent-subtle: #DDF6F9;      /* active nav item background */
+  --color-progress-fill: var(--brand-cyan);
+
+  /* ---------- Gold: rewards & special emphasis ONLY ---------- */
+  --color-reward: var(--brand-gold);
+  --color-reward-border: var(--brand-gold-dark);
+  --color-reward-shine: var(--brand-gold-shine);
+  --color-reward-text: #8A5A12;        /* text-safe gold on light surfaces */
+  --color-reward-on: #0B1530;          /* text on a gold fill */
+  --color-reward-subtle: #FBF1DC;
+
+  /* ---------- Semantic status (kept distinct from brand + points hues) ---------- */
+  --color-success: #0F7B5C;            /* jade */
+  --color-success-subtle: #DDF3EB;
+  --color-warning: #B54708;            /* burnt orange (not gold) */
+  --color-warning-subtle: #FDEBDC;
+  --color-danger: #B4233F;             /* crimson (not the vermilion red point) */
+  --color-danger-hover: #9C1C35;
+  --color-danger-subtle: #FBE3E8;
+  --color-info: #5B47C7;               /* violet (not brand blue / cyan) */
+  --color-info-subtle: #ECE8FB;
+
+  /* ---------- Points system (own clear hues) ---------- */
+  --color-point-green: #177A36;
+  --color-point-green-fill: #22A04B;
+  --color-point-green-subtle: #DFF3E5;
+  --color-point-red: #C2361B;
+  --color-point-red-fill: #D9481F;
+  --color-point-red-subtle: #FBE6DF;
+  --color-point-black: #111318;
+  --color-point-black-fill: #111318;
+  --color-point-black-subtle: #E4E6EB;
+  --color-point-black-on: #FFFFFF;
+
+  /* ---------- Brand gradient (login hero + page header only) ---------- */
+  --gradient-brand: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-cyan) 100%);
+  --gradient-page: linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg) 100%);
+
+  /* ---------- Focus ring ---------- */
+  --focus-ring: var(--brand-cyan);
+  --focus-ring-edge: var(--brand-navy);   /* gives the cyan ring ≥3:1 on light surfaces */
+  --focus-ring-gap: var(--color-surface);
+  --focus-shadow: 0 0 0 2px var(--focus-ring-gap), 0 0 0 4px var(--focus-ring), 0 0 0 5px var(--focus-ring-edge);
+
+  /* ---------- Map ---------- */
+  --map-tile-filter: none;
+
+  /* ---------- Typography ---------- */
+  --font-sans: 'IBM Plex Sans Arabic', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --font-size-xs: 0.75rem;    /* 12 */
+  --font-size-sm: 0.875rem;   /* 14 */
+  --font-size-md: 1rem;       /* 16 */
+  --font-size-lg: 1.125rem;   /* 18 */
+  --font-size-xl: 1.25rem;    /* 20 */
+  --font-size-2xl: 1.5rem;    /* 24 */
+  --font-size-3xl: 1.875rem;  /* 30 */
+  --font-size-4xl: 2.25rem;   /* 36 */
+  --font-size-5xl: 3rem;      /* 48 */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.25;
+  --line-height-snug: 1.4;
+  --line-height-normal: 1.6;  /* Arabic needs generous leading */
+  --letter-spacing-caps: 0.06em;
+
+  /* ---------- Spacing (4px base) ---------- */
+  --space-0: 0;
+  --space-1: 0.25rem;  /* 4 */
+  --space-2: 0.5rem;   /* 8 */
+  --space-3: 0.75rem;  /* 12 */
+  --space-4: 1rem;     /* 16 */
+  --space-5: 1.25rem;  /* 20 */
+  --space-6: 1.5rem;   /* 24 */
+  --space-8: 2rem;     /* 32 */
+  --space-10: 2.5rem;  /* 40 */
+  --space-12: 3rem;    /* 48 */
+  --space-16: 4rem;    /* 64 */
+  --space-20: 5rem;    /* 80 */
+
+  /* ---------- Sizes ---------- */
+  --control-height-sm: 2rem;      /* 32 */
+  --control-height-md: 2.75rem;   /* 44 — touch target */
+  --control-height-lg: 3.25rem;   /* 52 */
+  --icon-size-sm: 1rem;
+  --icon-size-md: 1.25rem;
+  --icon-size-lg: 1.5rem;
+  --logo-size-header: 2.25rem;
+  --logo-size-login: 5.5rem;
+  --sidebar-width: 16.5rem;
+  --topbar-height: 3.75rem;
+  --bottombar-height: 4rem;
+  --content-max-width: 72rem;
+  --dialog-width-sm: 26rem;
+  --dialog-width-md: 34rem;
+  --border-width: 1px;
+  --border-width-strong: 2px;
+
+  /* ---------- Radii (restrained, slightly angular) ---------- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /* ---------- Shadows (navy-tinted) ---------- */
+  --shadow-xs: 0 1px 2px rgb(1 27 90 / 0.08);
+  --shadow-sm: 0 1px 3px rgb(1 27 90 / 0.10), 0 1px 2px rgb(1 27 90 / 0.06);
+  --shadow-md: 0 4px 12px rgb(1 27 90 / 0.10), 0 2px 4px rgb(1 27 90 / 0.06);
+  --shadow-lg: 0 16px 40px rgb(1 27 90 / 0.16), 0 4px 12px rgb(1 27 90 / 0.08);
+  --shadow-reward: 0 6px 20px rgb(185 125 37 / 0.28);
+  --shadow-up: 0 -4px 16px rgb(1 27 90 / 0.06);      /* bottom navigation bar */
+
+  /* ---------- Decorative facet (echo of the logo's diagonal cuts) ---------- */
+  --facet-cut: 2.5rem;
+  --facet-angle-clip: polygon(0 0, 100% 0, 100% calc(100% - var(--facet-cut)), 0 100%);
+
+  /* ---------- Z-index ---------- */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 100;
+  --z-nav: 200;
+  --z-drawer: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-skip-link: 600;
+
+  /* ---------- Motion ---------- */
+  --duration-instant: 80ms;
+  --duration-fast: 140ms;
+  --duration-normal: 220ms;
+  --duration-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1.15);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ---------- Breakpoints (reference only; CSS media queries can't read vars) ----------
+     --bp-sm: 480px; --bp-md: 768px; --bp-lg: 1024px; --bp-xl: 1280px */
+}
+
+/* ====================== Dark theme (matches the logo) ====================== */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: var(--brand-night);
+  --color-surface: #071636;
+  --color-surface-sunken: #04102A;
+  --color-surface-raised: #0B1F4A;
+  --color-surface-inverse: #E6ECF8;
+  --color-border: #1C2E5C;
+  --color-border-strong: #5B6E96;
+  --color-text: #E6ECF8;
+  --color-text-muted: #A9B7D6;
+  --color-text-subtle: #93A3C6;
+  --color-text-inverse: #0B1530;
+  --color-text-on-primary: #FFFFFF;
+  --color-scrim: rgb(0 2 4 / 0.72);
+
+  --color-primary: #2B6FE0;            /* lifted brand blue: visible on navy surfaces */
+  --color-primary-hover: #2563D6;       /* darker on hover keeps white label ≥4.5:1 */
+  --color-primary-pressed: #1F5FC7;
+  --color-primary-text: #7EA8FF;
+  --color-primary-subtle: #0E2557;
+  --color-primary-subtle-hover: var(--brand-navy-2);
+  --color-link: #7EA8FF;
+  --color-link-hover: #A9C4FF;
+
+  --color-accent: var(--brand-cyan-bright);
+  --color-accent-strong: var(--brand-cyan-bright);
+  --color-accent-text: var(--brand-cyan-bright);
+  --color-accent-subtle: var(--brand-navy);
+  --color-progress-fill: var(--brand-cyan-bright);
+
+  --color-reward: var(--brand-gold);
+  --color-reward-border: var(--brand-gold-dark);
+  --color-reward-text: var(--brand-gold);
+  --color-reward-on: #0B1530;
+  --color-reward-subtle: #2A2210;
+
+  --color-success: #5EE0B4;
+  --color-success-subtle: #0B2E2A;
+  --color-warning: #F3A04A;
+  --color-warning-subtle: #33200E;
+  --color-danger: #FF7F9C;
+  --color-danger-hover: #FF9AB0;
+  --color-danger-subtle: #3A1220;
+  --color-info: #A99BFF;
+  --color-info-subtle: #1E1A4A;
+
+  --color-point-green: #5FD07E;
+  --color-point-green-fill: #22A04B;
+  --color-point-green-subtle: #0D2E1D;
+  --color-point-red: #FF8A73;
+  --color-point-red-fill: #D9481F;
+  --color-point-red-subtle: #3A170F;
+  --color-point-black: #E6ECF8;
+  --color-point-black-fill: var(--brand-black);
+  --color-point-black-subtle: #000204;
+  --color-point-black-on: #E6ECF8;
+
+  --gradient-page: radial-gradient(120% 80% at 50% 0%, var(--brand-night) 0%, var(--brand-black) 100%);
+
+  --focus-ring: var(--brand-cyan-bright);
+  --focus-ring-edge: transparent;
+  --focus-ring-gap: var(--color-bg);
+
+  --map-tile-filter: brightness(0.72) contrast(1.15) saturate(0.6) hue-rotate(185deg) invert(0.92);
+
+  --shadow-xs: 0 1px 2px rgb(0 2 4 / 0.5);
+  --shadow-sm: 0 1px 3px rgb(0 2 4 / 0.55), 0 1px 2px rgb(0 2 4 / 0.4);
+  --shadow-md: 0 4px 14px rgb(0 2 4 / 0.6), 0 2px 4px rgb(0 2 4 / 0.4);
+  --shadow-lg: 0 18px 44px rgb(0 2 4 / 0.7), 0 4px 12px rgb(0 2 4 / 0.5);
+  --shadow-reward: 0 6px 22px rgb(228 175 72 / 0.22);
+  --shadow-up: 0 -4px 18px rgb(0 2 4 / 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+  }
+}
