@@ -442,3 +442,12 @@ verify_jwt = false
 
 [functions.bootstrap]
 verify_jwt = false
+
+[functions.api]
+verify_jwt = false
+
+[functions.dispatch]
+verify_jwt = false
+
+[functions.telegram-webhook]
+verify_jwt = false
