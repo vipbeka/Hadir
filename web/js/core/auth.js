@@ -31,7 +31,7 @@ export async function currentPerson() {
   if (!data.session) return null;
   const uid = data.session.user.id;
   const { data: profile, error } = await sb.from('profiles')
-    .select('id, full_name_ar, full_name_en, phone, role, active')
+    .select('id, full_name_ar, full_name_en, job_title_ar, job_title_en, phone, role, active, reminders_enabled')
     .eq('id', uid).maybeSingle();
   if (error && (error.code === 'PGRST301' || /JWT|token/i.test(error.message))) return null;
   if (error) throw error;

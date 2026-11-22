@@ -51,3 +51,8 @@ export const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel
 
 let idCounter = 0;
 export const uid = (prefix = 'zh') => `${prefix}-${++idCounter}`;
+
+/** Append children, skipping null/undefined/false (native append would print "null"). */
+export function add(el, ...children) { return append(el, children); }
+/** Replace all children with the given ones (null-safe). */
+export function fill(el, ...children) { clear(el); return append(el, children); }

@@ -17,7 +17,7 @@ export function navigate(path, { replace = false } = {}) {
 export const onRoute = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 
 export function resolve() {
-  const path = currentPath();
+  const path = currentPath().split('?')[0];   // "?tab" suffixes are page state
   const handler = routes.get(path) || notFound;
   current = path;
   listeners.forEach((fn) => fn(path));

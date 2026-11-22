@@ -4,7 +4,7 @@
 
 Staff attendance, points and rewards for **زينترا / Zintra**: location-checked check-in and check-out, a points system with green, red and black points, a monthly green reward, leave and early-leave requests, Telegram alerts for the owner, and monthly payroll-ready reports.
 
-> Status: **Step 1 done (design system and app shell). Step 2 in progress** (data model, code login, roles, employee management). This README grows with each step.
+> Status: **Steps 1–10 built.** All the features are in place: attendance with a map, the points engine, scheduled jobs, Telegram and Web Push, leave and early leave, rewards, payroll exports and the leaderboard. Remaining hand-over items are listed below.
 
 ## Stack
 
@@ -42,6 +42,36 @@ supabase/rollback/          matching *.down.sql files (see supabase/rollback/REA
 supabase/tests/rls_test.sql RLS/privilege tests (run inside a rolled-back transaction)
 supabase/functions/         Edge Functions (Deno): login, owner-employees, bootstrap
 ```
+
+### Features (Steps 3–10) and where they live
+| Area | Database (`supabase/migrations/*_engine.sql`) | Screen |
+|---|---|---|
+| Check-in / check-out (geofence, server clock) | `svc_check_in`, `svc_check_out`, `svc_my_day` | Staff → Attendance (Leaflet + OpenStreetMap) |
+| Windows, day rules, settings (audited, `rule_version`) | `private.evaluate_time`, `svc_save_day`, `svc_update_settings` | Owner → Settings |
+| Points engine, red warning policy | `private.recalc_reds`, `private.add_event` | Staff → My points |
+| Absence job, digest, weekly summary, reminders | `private.run_absence`, `run_digest`, `run_weekly`, `enqueue_reminders`, `private.tick()` | (scheduled) |
+| Owner Telegram alerts + early-leave approve/reject from Telegram | outbox → `dispatch` / `telegram-webhook` functions | Owner → Settings → Connect Telegram |
+| Staff Web Push reminders | `push_subscriptions` + `dispatch` | Staff → Home / My account |
+| Outcome points, manual adjustments (Add/Remove/Set, black needs amount confirmation) | `svc_award_outcome`, `svc_manual_adjust` | Owner → Employees → Edit |
+| Reward request & payout (InstaPay / Vodafone Cash) | `svc_request_reward`, `svc_decide_reward` | Staff → My points · Owner → Approvals |
+| Leave, early leave, retroactive reversal | `svc_request_leave`, `svc_decide_leave`, `svc_request_early_leave`, `svc_decide_early_leave` | Staff → Requests · Owner → Approvals |
+| Holidays | `svc_save_holiday` | Owner → Public holidays |
+| Dashboards, payroll (PDF / Excel / CSV) | `svc_owner_dashboard`, `svc_payroll`, `svc_export_raw` | Owner → Dashboard, Payroll reports |
+| Leaderboard (green only for staff) | `public.get_leaderboard()` | Leaderboard |
+| Job titles | `profiles.job_title_ar/en`, `svc_set_job_title` | Owner → Employees |
+
+All staff/owner actions go through one Edge Function, `api`, which authenticates the caller and enforces their role, then calls the matching `svc_*` function. That function enforces every rule using the database clock in Africa/Cairo time.
+
+### Schedules (pg_cron)
+- `zh-tick` runs every minute. It calls `private.tick()`, which runs:
+  - the absence job after the cutoff, with catch-up for up to 7 days;
+  - the digest at its send time (a missed digest for today is sent late once; older ones are recorded as skipped);
+  - the weekly summary;
+  - the monthly deductions on the 1st;
+  - flags for missing check-outs;
+  - reminder fan-out.
+- `zh-dispatch` runs every minute, but only when the outbox has due messages. It POSTs to the `dispatch` function with a random token stored in Supabase Vault.
+- Run records are kept in `public.job_runs`. Each job is idempotent: running it twice doesn't create duplicate points or send duplicate messages.
 
 ### Data model highlights
 - **Profiles and roles.** Each person has a `profiles` row with role `owner` or `staff`. The role is also copied into `app_metadata.role` for routing, but the database row is what counts. Every Auth user has a made-up internal email (`<uuid>@staff.invalid`) that is never shown and never used to sign in.
@@ -112,12 +142,30 @@ After signing in, the owner should regenerate their code from **My account** and
 | Name | Where | Used by |
 |---|---|---|
 | `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` | provided by the platform to Edge Functions | all functions |
-| `TELEGRAM_BOT_TOKEN` | Dashboard → Edge Functions → Secrets (Step 5) | Telegram sender / webhook |
-| `VAPID_PRIVATE_KEY` | Dashboard → Edge Functions → Secrets (Step 5) | web push job |
+| `TELEGRAM_BOT_TOKEN` | Dashboard → Edge Functions → Secrets | `dispatch`, `api` (connect/test), `telegram-webhook` |
+| `VAPID_PRIVATE_KEY` | Dashboard → Edge Functions → Secrets | `dispatch` (web push). The public key is in `web/js/core/push.js` and `dispatch/index.ts` |
 | `LOGIN_HASH_PEPPER` (optional) | Dashboard → Edge Functions → Secrets | HMAC key for attempt identifiers (defaults to a service-key-derived key) |
 | `ALLOWED_ORIGINS` (optional) | Dashboard → Edge Functions → Secrets | CORS allow-list for the static site origin |
 
 Secret values are entered only in the Dashboard. They never go in chat, MCP arguments, command lines, git or logs. The browser gets only the project URL and the publishable key (`web/js/config.js`).
+
+### Telegram setup
+1. Create the bot with @BotFather (`/newbot`). Put the token in the secret `TELEGRAM_BOT_TOKEN`, entered in the Dashboard only.
+2. From the owner chat (ID 1360140225 by default), send `/start` to the bot.
+3. Owner → Settings → **Connect Telegram bot**. This calls `setWebhook` with a secret header that only our webhook accepts.
+4. Send yourself a test message from the same screen.
+5. Early-leave requests arrive with ✅/❌ buttons. You can also reply `موافق 7` / `رفض 7` (or `approve 7` / `reject 7`). Updates from any other chat are ignored.
+
+### Web Push (VAPID)
+The key pair was generated once with `web-push generate-vapid-keys`. The private key was written to a git-ignored file under `.secrets/`, then moved by the owner into the Dashboard secret `VAPID_PRIVATE_KEY`, and the local file was deleted. To rotate the keys:
+1. Generate a new pair.
+2. Replace the public key in both files above.
+3. Update the secret.
+4. Redeploy `dispatch` and the site.
+5. Staff re-enable notifications from **My account**.
+
+### Backups
+Supabase takes daily backups on paid plans, and Point-in-Time Recovery is an add-on. On the free plan, run `supabase db dump -f backup.sql --data-only` (plus a schema dump) on a schedule. To check a restore, run `psql "$DB_URL" -f backup.sql` against a scratch project.
 
 ## Run locally
 
@@ -139,6 +187,8 @@ npm run check:keyboard   # tab order + visible focus, keyboard language switch, 
 npm run check:auth       # login/guards/code-once/employees flows (MOCKED backend)
 npm run check:sql        # migrations + RLS tests + rollback on a scratch Postgres
 npm run check:deno       # Edge Function unit tests (code generation, hashing, matching)
+node tools/e2e-features.mjs   # Steps 3–10 flows (MOCKED backend): geofence, check-in/out, approvals, exports
+node tools/pwa-check.mjs      # installability + offline
 ```
 
 `ui-check`, `keyboard-check` and `check:auth` replace the Supabase API with a mock (`tools/mock-backend.mjs`), so they test the UI without a network. Real-backend behaviour is checked separately against the project.

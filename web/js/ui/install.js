@@ -1,7 +1,7 @@
 // "Install the app" UI: a button where the browser supports the install
 // prompt, step-by-step instructions on iPhone/iPad (Safari has no
 // prompt), nothing when already installed. Also the update banner.
-import { h } from '../core/dom.js';
+import { h, add, fill } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 import { store } from '../core/storage.js';
 import { state, promptInstall, onPwaChange, applyUpdate } from '../core/pwa.js';
@@ -26,9 +26,9 @@ function iosSteps() {
 export function installButton({ variant = 'secondary', block = false, size = 'md' } = {}) {
   const host = h('div', { class: 'install-slot' });
   const render = (s) => {
-    host.replaceChildren();
+    fill(host, );
     if (s.installed || (!s.canPrompt && !s.iosManual)) return;
-    host.append(button({ label: t('pwa.install'), variant, block, size, icon: 'download', onClick: async () => {
+    add(host, button({ label: t('pwa.install'), variant, block, size, icon: 'download', onClick: async () => {
       if (s.canPrompt) {
         const outcome = await promptInstall();
         if (outcome === 'accepted') toast({ title: t('pwa.installed'), tone: 'success' });
@@ -44,9 +44,9 @@ export function installButton({ variant = 'secondary', block = false, size = 'md
 export function installBanner() {
   const host = h('div', { class: 'install-slot' });
   const render = (s) => {
-    host.replaceChildren();
+    fill(host, );
     if (s.installed || store.get('zh.installDismissed') === '1' || (!s.canPrompt && !s.iosManual)) return;
-    host.append(h('section', { class: 'install-card', 'aria-labelledby': 'install-title' },
+    add(host, h('section', { class: 'install-card', 'aria-labelledby': 'install-title' },
       h('img', { src: new URL('../../assets/icons/icon-192.png', import.meta.url).href, alt: '', width: '48', height: '48', class: 'install-card__icon' }),
       h('div', { class: 'install-card__text' },
         h('p', { class: 'install-card__title', id: 'install-title' }, t('pwa.bannerTitle', { app: `\u2066${t('app.name')}\u2069` })),

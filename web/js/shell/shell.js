@@ -13,7 +13,7 @@ import { installButton } from '../ui/install.js';
 const BOTTOM_MAX = 4; // first 4 items in the bottom bar; the rest go to "More"
 
 function navLink(item, currentPath, cls) {
-  const active = currentPath === item.path;
+  const active = currentPath.split('?')[0] === item.path;
   return h('a', {
     class: cls,
     href: `#${item.path}`,

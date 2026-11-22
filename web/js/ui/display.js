@@ -1,6 +1,6 @@
 // Display components: card, stat, badge, alert, table, progress,
 // empty state, skeleton. Pure builders — no global state.
-import { h } from '../core/dom.js';
+import { h, append } from '../core/dom.js';
 import { icon } from './icons.js';
 
 /** card({ title, subtitle, body, footer, actions, facet, interactive, onClick }) */
@@ -16,7 +16,7 @@ export function card({ title, subtitle, body, footer, actions, facet = false, in
         subtitle ? h('p', { class: 'card__subtitle' }, subtitle) : null),
       actions || null));
   }
-  if (body) el.append(...[body].flat());
+  if (body) append(el, [body]);
   if (footer) el.append(h('div', { class: 'card__footer' }, footer));
   return el;
 }

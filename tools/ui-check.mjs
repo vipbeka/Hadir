@@ -18,8 +18,17 @@ if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
 const pages = [
   ['login', '/index.html#/login', null],
   ['staff-home', '/index.html#/staff/home', '12345678'],
+  ['staff-attendance', '/index.html#/staff/attendance', '12345678'],
+  ['staff-points', '/index.html#/staff/points', '12345678'],
+  ['staff-leaderboard', '/index.html#/staff/leaderboard', '12345678'],
+  ['staff-requests', '/index.html#/staff/requests', '12345678'],
   ['staff-account', '/index.html#/staff/account', '12345678'],
   ['owner-dashboard', '/index.html#/owner/dashboard', '87654321'],
+  ['owner-approvals', '/index.html#/owner/approvals', '87654321'],
+  ['owner-payroll', '/index.html#/owner/payroll', '87654321'],
+  ['owner-holidays', '/index.html#/owner/holidays', '87654321'],
+  ['owner-settings', '/index.html#/owner/settings', '87654321'],
+  ['owner-leaderboard', '/index.html#/owner/leaderboard', '87654321'],
   ['owner-employees', '/index.html#/owner/employees', '87654321'],
   ['owner-employee-dialog', '/index.html#/owner/employees', '87654321'],
   ['owner-account', '/index.html#/owner/account', '87654321'],
@@ -35,11 +44,12 @@ for (const [name, url, code] of pages) {
   for (const width of widths) {
     for (const lang of langs) {
       for (const theme of themes) {
-        const ctx = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
+        const ctx = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 1, serviceWorkers: 'block',
+          geolocation: { latitude: 29.98325, longitude: 31.32400, accuracy: 12 }, permissions: ['geolocation'] });
         await ctx.addInitScript(([l, th]) => { localStorage.setItem('zh.lang', l); localStorage.setItem('zh.theme', th); }, [lang, theme]);
         const page = await ctx.newPage();
         const problems = [];
-        page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') problems.push(`console.${m.type()}: ${m.text()}`); });
+        page.on('console', (m) => { if (/Service Worker registration blocked/.test(m.text())) return; if (m.type() === 'error' || m.type() === 'warning') problems.push(`console.${m.type()}: ${m.text()}`); });
         page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
         page.on('requestfailed', (r) => problems.push(`requestfailed: ${r.url()}`));
         page.on('response', (r) => { if (r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
@@ -47,6 +57,8 @@ for (const [name, url, code] of pages) {
         if (code) { await uiLogin(page, base, code); await page.waitForFunction(() => !location.hash.includes('login')); }
         await page.goto(base + url, { waitUntil: 'networkidle' });
         await page.waitForTimeout(250);
+        if (name === 'owner-payroll') { await page.click('text=/إنشاء التقرير|Generate report/'); await page.waitForTimeout(400); }
+        if (name === 'staff-attendance') await page.waitForTimeout(800);
         if (name === 'owner-employee-dialog') {
           await page.locator('tbody tr').nth(1).locator('button').click();
           await page.waitForSelector('.session-item');
@@ -66,10 +78,12 @@ for (const [name, url, code] of pages) {
               }
             }
           }
-          return { dir: de.dir, lang: de.lang, theme: de.dataset.theme, overflowX, offenders, title: document.title };
+          const leak = /(^|\s)(null|undefined|NaN|\[object Object\])(\s|$)/.exec(document.body.innerText);
+          return { dir: de.dir, lang: de.lang, theme: de.dataset.theme, overflowX, offenders, title: document.title, leak: leak ? leak[2] : null };
         });
         if (info.dir !== (lang === 'ar' ? 'rtl' : 'ltr')) problems.push(`dir=${info.dir}`);
         if (info.theme !== theme) problems.push(`theme=${info.theme}`);
+        if (info.leak) problems.push(`raw value shown to the user: "${info.leak}"`);
         if (info.overflowX) problems.push(`horizontal overflow: ${info.offenders.join(' | ')}`);
         if (!info.title.includes('Zintra حاضر')) problems.push(`title missing product name: ${info.title}`);
         const tag = `${name} ${width} ${lang} ${theme}`;

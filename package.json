@@ -11,6 +11,8 @@
     "check:keyboard": "node tools/keyboard-check.mjs http://127.0.0.1:8787",
     "check:auth": "node tools/e2e-auth.mjs http://127.0.0.1:8787",
     "check:sql": "tools/sql-test/run.sh",
+    "check:features": "node tools/e2e-features.mjs http://127.0.0.1:8787",
+    "check:pwa": "node tools/pwa-check.mjs http://127.0.0.1:8787",
     "check:deno": "cd supabase/functions && deno test --allow-env --config deno.json tests/",
     "check": "npm run check:sql && npm run check:tokens && npm run check:contrast && npm run check:ui && npm run check:keyboard"
   }

@@ -15,6 +15,16 @@ import { renderLogin } from './pages/login.js';
 import { renderPlaceholder } from './pages/placeholder.js';
 import { renderAccount } from './pages/account.js';
 import { renderEmployees } from './pages/owner/employees.js';
+import { renderStaffHome } from './pages/staff/home.js';
+import { renderAttendance } from './pages/staff/attendance.js';
+import { renderStaffPoints } from './pages/staff/points.js';
+import { renderStaffRequests } from './pages/staff/requests.js';
+import { renderLeaderboard } from './pages/leaderboard.js';
+import { renderOwnerDashboard } from './pages/owner/dashboard.js';
+import { renderApprovals } from './pages/owner/approvals.js';
+import { renderPayroll } from './pages/owner/payroll.js';
+import { renderHolidays } from './pages/owner/holidays.js';
+import { renderSettings } from './pages/owner/settings.js';
 import { displayName } from './core/format.js';
 import { toast } from './ui/toast.js';
 import { initPwa } from './core/pwa.js';
@@ -25,10 +35,26 @@ let me = null;          // current profile (null when signed out)
 let loginNotice = null; // message to show on the login screen
 
 const PAGES = {
+  '/staff/home': renderStaffHome,
+  '/staff/attendance': renderAttendance,
+  '/staff/points': renderStaffPoints,
+  '/staff/leaderboard': renderLeaderboard,
+  '/staff/requests': renderStaffRequests,
   '/staff/account': renderAccount,
-  '/owner/account': renderAccount,
+  '/owner/dashboard': renderOwnerDashboard,
+  '/owner/approvals': renderApprovals,
   '/owner/employees': renderEmployees,
+  '/owner/leaderboard': renderLeaderboard,
+  '/owner/payroll': renderPayroll,
+  '/owner/holidays': renderHolidays,
+  '/owner/settings': renderSettings,
+  '/owner/account': renderAccount,
 };
+
+// Per-page cleanup (e.g. stop geolocation watching when leaving Attendance)
+let cleanups = [];
+const runCleanups = () => { cleanups.forEach((fn) => { try { fn(); } catch { /* ignore */ } }); cleanups = []; };
+const registerCleanup = (fn) => cleanups.push(fn);
 
 async function doSignOut(notice = 'login.signedOut') {
   await signOut();
@@ -40,18 +66,19 @@ async function doSignOut(notice = 'login.signedOut') {
 function guard(path) {
   if (!me) return '/login';
   const tree = me.role === 'owner' ? '/owner/' : '/staff/';
-  return path.startsWith(tree) ? null : HOME[me.role];
+  return path.split('?')[0].startsWith(tree) ? null : HOME[me.role];
 }
 
 function mountTree(nav) {
   nav.forEach((item, idx) => {
     route(item.path, (path) => {
+      runCleanups();
       const redirect = guard(path);
       if (redirect) { navigate(redirect, { replace: true }); return; }
       const user = { name: displayName(me), roleKey: `role.${me.role}` };
       const { main } = renderShell(root, { nav, currentPath: path, user, onSignOut: () => doSignOut() });
       const page = PAGES[path];
-      if (page) page(main, { me, onSignOut: () => doSignOut() });
+      if (page) page(main, { me, onSignOut: () => doSignOut(), registerCleanup });
       else renderPlaceholder(main, { item, user, isHome: idx === 0 });
       window.scrollTo(0, 0);
     });

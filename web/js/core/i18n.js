@@ -38,7 +38,7 @@ export const onLangChange = (fn) => { listeners.add(fn); return () => listeners.
 export function t(key, vars) {
   let msg = messages[key];
   if (msg === undefined) {
-    console.warn(`[i18n] missing key "${key}" for ${lang}`);
+    if (!key.startsWith('err.')) console.warn(`[i18n] missing key "${key}" for ${lang}`);
     msg = key;
   }
   if (vars) msg = msg.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? `{${k}}`));

@@ -1,7 +1,7 @@
 // My account — staff and owner. Shows only the person's own profile
 // fields. There is NO salary field here for anyone (salary is owner-only
 // data shown only in the owner's employee management).
-import { h } from '../core/dom.js';
+import { h, add, fill } from '../core/dom.js';
 import { t, setDocumentTitle } from '../core/i18n.js';
 import { callFunction } from '../core/api.js';
 import { errorMessage } from '../core/errors.js';
@@ -12,18 +12,31 @@ import { button, setLoading } from '../ui/button.js';
 import { confirmDialog } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { showCodeOnce } from '../ui/code-dialog.js';
+import { switchControl } from '../ui/field.js';
+import { pushCard } from '../ui/push-card.js';
+import { api } from '../core/api.js';
+import { jobTitle } from '../core/format.js';
 
 export function renderAccount(main, { me, onSignOut }) {
   setDocumentTitle(t('account.title'));
   const dl = h('dl', { class: 'kv' },
     h('dt', {}, t('account.name')), h('dd', {}, displayName(me)),
     h('dt', {}, t('account.phone')), h('dd', { dir: 'ltr', class: 'num' }, me.phone || '—'),
-    h('dt', {}, t('account.role')), h('dd', {}, t(`role.${me.role}`)));
+    h('dt', {}, t('account.role')), h('dd', {}, t(`role.${me.role}`)),
+    jobTitle(me) ? [h('dt', {}, t('job.title')), h('dd', {}, jobTitle(me))] : null);
   const signOut = button({ label: t('common.signOut'), variant: 'secondary', icon: 'logOut', onClick: onSignOut });
   signOut.querySelector('.icon')?.classList.add('icon--flip');
 
-  main.append(pageHeader({ title: t('account.title'), subtitle: t('account.subtitle') }),
+  add(main, pageHeader({ title: t('account.title'), subtitle: t('account.subtitle') }),
     card({ title: displayName(me), body: dl }));
+
+  if (me.role === 'staff') {
+    const sw = switchControl({ label: t('push.toggle'), checked: me.reminders_enabled !== false, onChange: async (e) => {
+      try { await api('set_reminders', { enabled: e.target.checked, language: document.documentElement.lang }); toast({ title: t('set.saved'), tone: 'success' }); }
+      catch (err) { e.target.checked = !e.target.checked; toast({ title: t('error.title'), text: errorMessage(err), tone: 'danger' }); }
+    } });
+    add(main, card({ title: t('push.title'), body: [h('p', { class: 'text-sm text-muted' }, t('push.text')), pushCard(me, { dismissible: false }), sw] }));
+  }
 
   if (me.role === 'owner') {
     const regen = button({ label: t('emp.regenerate'), variant: 'secondary', icon: 'lock', onClick: async () => {
@@ -35,7 +48,7 @@ export function renderAccount(main, { me, onSignOut }) {
       } catch (err) { toast({ title: t('error.title'), text: errorMessage(err), tone: 'danger' }); }
       finally { setLoading(regen, false); }
     } });
-    main.append(card({ title: t('account.myCode'), body: h('p', { class: 'text-sm text-muted' }, t('account.myCodeHint')), footer: [regen] }));
+    add(main, card({ title: t('account.myCode'), body: h('p', { class: 'text-sm text-muted' }, t('account.myCodeHint')), footer: [regen] }));
   }
-  main.append(card({ title: t('common.signOut'), body: h('p', { class: 'text-sm text-muted' }, t('account.signOutHint')), footer: [signOut] }));
+  add(main, card({ title: t('common.signOut'), body: h('p', { class: 'text-sm text-muted' }, t('account.signOutHint')), footer: [signOut] }));
 }

@@ -36,21 +36,22 @@ serve(async (req, body) => {
   // Telegram setup actions (owner): register the webhook / send a test.
   if (action === "telegram_connect" || action === "telegram_test" || action === "telegram_status") {
     if (caller.role !== "owner") fail(403, "forbidden");
+    if (action === "telegram_status" && !hasToken()) return json(req, { data: { connected: false, token_missing: true } });
     if (!hasToken()) return json(req, { error: "telegram_token_missing" }, 400);
     if (action === "telegram_status") {
       const info = await tg("getWebhookInfo", {});
       const r = (info.result ?? {}) as Record<string, unknown>;
-      return json(req, { connected: !!r.url, pending: r.pending_update_count ?? 0, last_error: r.last_error_message ?? null });
+      return json(req, { data: { connected: !!r.url, pending: r.pending_update_count ?? 0, last_error: r.last_error_message ?? null } });
     }
     if (action === "telegram_connect") {
       const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-webhook`;
       const r = await tg("setWebhook", { url, secret_token: await webhookSecret(), allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
-      return r.ok ? json(req, { ok: true }) : json(req, { error: "telegram_failed", detail: String(r.description ?? "") }, 400);
+      return r.ok ? json(req, { data: { ok: true } }) : json(req, { error: "telegram_failed", detail: String(r.description ?? "") }, 400);
     }
     const { data } = await admin.from("settings").select("owner_telegram_chat_id").eq("id", true).single();
     const msg = formatOwnerMessage({ kind: "test" });
     const r = await tg("sendMessage", { chat_id: data?.owner_telegram_chat_id, text: msg.text, parse_mode: "HTML" });
-    return r.ok ? json(req, { ok: true }) : json(req, { error: "telegram_failed", detail: String(r.description ?? "") }, 400);
+    return r.ok ? json(req, { data: { ok: true } }) : json(req, { error: "telegram_failed", detail: String(r.description ?? "") }, 400);
   }
 
   const entry = ACTIONS[action];

@@ -1,6 +1,6 @@
 // Step-1 shell preview pages (illustrative content; replaced by real
 // screens in later steps).
-import { h } from '../core/dom.js';
+import { h, add, fill } from '../core/dom.js';
 import { t, setDocumentTitle } from '../core/i18n.js';
 import { pageHeader } from '../shell/shell.js';
 import { card, stat, badge, progress, emptyState, alert } from '../ui/display.js';
@@ -8,13 +8,13 @@ import { installBanner } from '../ui/install.js';
 
 export function renderPlaceholder(main, { item, user, isHome }) {
   setDocumentTitle(t(item.labelKey));
-  main.append(pageHeader({
+  add(main, pageHeader({
     eyebrow: isHome ? t('shell.welcome', { name: user.name }) : t(user.roleKey),
     title: t(item.labelKey),
     subtitle: t('shell.previewNotice'),
   }));
   if (isHome) {
-    main.append(
+    add(main, 
       installBanner(),
       alert(t('shell.previewNotice'), { tone: 'info' }),
       h('div', { class: 'grid-auto' },
@@ -28,6 +28,6 @@ export function renderPlaceholder(main, { item, user, isHome }) {
             badge(`0 · ${t('points.black')}`, { tone: 'point-black', dot: true })),
         ] })));
   } else {
-    main.append(emptyState({ iconName: item.icon, title: t(item.labelKey), text: t('common.comingSoon') }));
+    add(main, emptyState({ iconName: item.icon, title: t(item.labelKey), text: t('common.comingSoon') }));
   }
 }

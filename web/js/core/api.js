@@ -25,3 +25,9 @@ export async function callFunction(name, body = {}, { auth = true } = {}) {
   if (!res.ok) throw new ApiError(json.error || 'server_error', res.status, json);
   return json;
 }
+
+/** Call the `api` Edge Function: api('check_in', { lat, lng, accuracy }) → data */
+export async function api(action, params = {}) {
+  const res = await callFunction('api', { action, params });
+  return res.data;
+}
