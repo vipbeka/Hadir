@@ -178,7 +178,7 @@ async function open(code, state = {}, { w = 390, lang = 'ar', storage = true } =
   check(/hadir-payroll-\d{4}-\d{2}/.test(name) && !/zintra/i.test(name), `export file name: ${name}`);
   await page.fill('input[type="month"]', '2026-01'); await page.dispatchEvent('input[type="month"]', 'change'); await page.waitForTimeout(200);
   check((await disabled()).every(Boolean), 'changing the month disables exports again');
-  state.hook = (a) => (a === 'payroll' ? { mode: '500' } : null);
+  state.hook = (a) => (a === 'payroll' || a === 'payroll_v2' ? { mode: '500' } : null);
   await page.click('button:has-text("إنشاء")'); await page.waitForTimeout(800);
   check((await disabled()).every(Boolean), 'failed generation keeps exports disabled');
   await ctx.close();

@@ -161,6 +161,13 @@
   --watch-shadow: rgb(1 20 60 / 0.38);
   --watch-ridge: rgb(0 0 0 / 0.10);
   --watch-ease: cubic-bezier(0.2, 1, 0.2, 1);
+  /* ---------- Printed documents (always dark ink on white paper, any theme) ---------- */
+  --print-ink: #0B1530;
+  --print-muted: #4A5878;
+  --print-line: #C8D0DE;
+  --print-paper: #FFFFFF;
+  --print-band: #EEF2F8;
+  --print-accent: #0245A0;
   --gradient-hero: linear-gradient(to bottom left, #1B4A9B 0%, #2160AC 45%, #1B7489 100%);
   --color-hero-end: #1B7489;
   --color-on-hero: #FFFFFF;

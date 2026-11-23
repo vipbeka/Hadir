@@ -29,6 +29,8 @@ import { renderPayroll } from './pages/owner/payroll.js';
 import { renderHolidays } from './pages/owner/holidays.js';
 import { renderSettings } from './pages/owner/settings.js';
 import { renderStaffAnnouncements, renderOwnerAnnouncements } from './pages/announcements.js';
+import { renderPayslip } from './pages/owner/payslip.js';
+import { renderEmployee } from './pages/owner/employee.js';
 import { displayName } from './core/format.js';
 import { toast } from './ui/toast.js';
 import { closeAllModals } from './ui/modal.js';
@@ -165,6 +167,17 @@ async function boot() {
   });
   mountTree(STAFF_NAV);
   mountTree(OWNER_NAV);
+  // owner detail pages (not in the menu; ?query = page state)
+  for (const [path, page, parent] of [['/owner/payslip', renderPayslip, '/owner/payroll'], ['/owner/employee', renderEmployee, '/owner/employees']]) {
+    route(path, (full) => {
+      runCleanups();
+      if (!me) { navigate('/login', { replace: true }); return; }
+      if (me.role !== 'owner') { navigate(HOME[me.role], { replace: true }); return; }
+      const { main } = renderShell(root, { nav: OWNER_NAV, currentPath: parent, user: { name: displayName(me), roleKey: `role.${me.role}` }, onSignOut: () => doSignOut() });
+      page(main, { me, registerCleanup, path: full });
+      window.scrollTo(0, 0);
+    });
+  }
   // Unknown hash routes show a real not-found state (with a way back),
   // never a silent redirect. "/" alone still opens the right home.
   fallback((path) => {

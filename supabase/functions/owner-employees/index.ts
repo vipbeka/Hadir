@@ -7,7 +7,7 @@
 // returned ONLY in the create / regenerate_code response, exactly once.
 // =====================================================================
 import { serve, json, str, fail, UUID_RE, PHONE_RE } from "../_shared/http.ts";
-import { rpc } from "../_shared/clients.ts";
+import { rpc, admin } from "../_shared/clients.ts";
 import { requireCaller } from "../_shared/auth.ts";
 import { createEmployee, setActive, regenerateCode, EmployeeError } from "../_shared/employees.ts";
 
@@ -36,6 +36,32 @@ function mapPg(e: unknown): never {
   if (/last owner/.test(msg)) fail(409, "last_owner");
   if (/salary must be/.test(msg)) fail(400, "invalid_salary");
   throw e;
+}
+
+/** Service call that turns 'ZH:<code>' into a 400 { error: code, detail }. */
+async function rpcOrCode<T = unknown>(fn: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await admin.rpc(fn, args);
+  if (error) {
+    const m = /^ZH:([a-z_]+)$/.exec(error.message ?? "");
+    if (m) { let detail: unknown = null; try { detail = error.details ? JSON.parse(error.details) : null; } catch { /* text */ }
+      throw new CodedError(m[1], detail); }
+    throw new Error(`${fn} failed`);
+  }
+  return data as T;
+}
+class CodedError extends Error { constructor(public code: string, public detail: unknown) { super(code); } }
+
+/** Delete the Auth user (cascades its sessions/identities). Idempotent:
+ *  "not found" counts as done. A failure stays visible and can be retried. */
+async function finishAuth(deletionId: string, employeeId: string) {
+  let ok = false; let err: string | null = null;
+  try {
+    const { error } = await admin.auth.admin.deleteUser(employeeId);
+    ok = !error || /not.?found/i.test(error.message ?? "") || (error as { status?: number }).status === 404;
+    if (!ok) err = `auth: ${error?.status ?? ""}`;
+  } catch (e) { err = e instanceof Error ? e.name : "auth error"; }
+  await rpc("svc_employee_deletion_result", { p_id: deletionId, p_ok: ok, p_error: err });
+  return { deletion_id: deletionId, employee_id: employeeId, status: ok ? "complete" : "auth_failed" };
 }
 
 serve(async (req, body) => {
@@ -112,6 +138,31 @@ serve(async (req, body) => {
       return json(req, { revoked: await rpc("svc_revoke_sessions", { p_actor: owner.id, p_profile: id, p_session: null, p_reason: "owner revoke all", p_keep_session: keep }) });
     }
 
+    // ---- permanent deletion (owner-confirmed; see svc_employee_delete)
+    case "delete_preview": {
+      const id = str(body.employee_id, { pattern: UUID_RE }) ?? fail(400, "invalid_request");
+      try { return json(req, { preview: await rpcOrCode("svc_employee_delete_preview", { p_actor: owner.id, p: { employee_id: id } }) }); }
+      catch (e) { if (e instanceof CodedError) return json(req, { error: e.code, detail: e.detail }, 400); throw e; }
+    }
+    case "delete": {
+      const id = str(body.employee_id, { pattern: UUID_RE }) ?? fail(400, "invalid_request");
+      let r: { deletion_id: string };
+      try {
+        r = await rpcOrCode<{ deletion_id: string }>("svc_employee_delete", { p_actor: owner.id,
+          p: { employee_id: id, confirm_name: str(body.confirm_name, { max: 120 }) ?? "", preview_token: str(body.preview_token, { max: 64 }) ?? "" } });
+      } catch (e) { if (e instanceof CodedError) return json(req, { error: e.code, detail: e.detail }, 400); throw e; }
+      // the database part is committed: access is already gone. Remove the sign-in account.
+      return json(req, { deletion: await finishAuth(r.deletion_id, id) });
+    }
+    case "deletions": {
+      return json(req, { deletions: await rpc("svc_employee_deletions", { p_actor: owner.id, p: {} }) });
+    }
+    case "delete_retry": {
+      const list = await rpc<Array<{ id: string; deleted_employee_id: string }>>("svc_employee_deletions", { p_actor: owner.id, p: {} });
+      const out = [];
+      for (const d of list) out.push(await finishAuth(d.id, d.deleted_employee_id));
+      return json(req, { deletions: out });
+    }
     default:
       fail(400, "unknown_action");
   }

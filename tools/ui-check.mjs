@@ -27,6 +27,8 @@ const pages = [
   ['owner-dashboard', '/index.html#/owner/dashboard', '87654321'],
   ['owner-approvals', '/index.html#/owner/approvals', '87654321'],
   ['owner-payroll', '/index.html#/owner/payroll', '87654321'],
+  ['owner-payslip', '/index.html#/owner/payslip?e=00000000-0000-4000-a000-0000000000bb&m=2026-10', '87654321'],
+  ['owner-employee', '/index.html#/owner/employee?id=00000000-0000-4000-a000-0000000000bb', '87654321'],
   ['owner-holidays', '/index.html#/owner/holidays', '87654321'],
   ['owner-settings', '/index.html#/owner/settings', '87654321'],
   ['owner-leaderboard', '/index.html#/owner/leaderboard', '87654321'],

@@ -40,3 +40,6 @@ export async function api(action, params = {}, opts = {}) {
   const res = await callFunction('api', { action, params }, opts);
   return res.data;
 }
+
+/** Call the owner-employees Edge Function: ownerEmployees('delete_preview', { employee_id }) */
+export const ownerEmployees = (action, body = {}, opts = {}) => callFunction('owner-employees', { action, ...body }, opts);

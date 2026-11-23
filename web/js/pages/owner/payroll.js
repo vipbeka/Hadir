@@ -1,6 +1,7 @@
-// Owner payroll: monthly payroll-ready report. Salary and deductions are
-// shown SEPARATELY (no net pay). Exports (PDF via print, Excel, CSV)
-// render the very same data the screen shows.
+// Owner payroll: one server calculation per employee — base salary,
+// approved earnings, approved deductions, net entitlement, what was paid and
+// what remains. Exports (PDF, Excel, CSV), payslips and the Telegram summary
+// all use the same figures. Inactive staff stay in the month they worked.
 import { h, clear, add, fill } from '../../core/dom.js';
 import { t, setDocumentTitle, getLang } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
@@ -13,6 +14,10 @@ import { button, setLoading } from '../../ui/button.js';
 import { input, select, setFieldError } from '../../ui/field.js';
 import { toast } from '../../ui/toast.js';
 import { MARK_SRC } from '../../ui/brand.js';
+import { navigate } from '../../core/router.js';
+import { payslipDoc, payslipsPdf, printDocs } from './docs.js';
+import { offerPdf } from './payslip.js';
+import { recordPayment } from './pay-actions.js';
 
 const egpNum = (p) => Number(p || 0) / 100;
 const plain = (p) => new Intl.NumberFormat('en-US').format(egpNum(p));
@@ -51,7 +56,9 @@ export async function renderPayroll(main) {
     exportHint, status);
   const body = h('div', { class: 'stack' }, emptyState({ iconName: 'fileText', title: t('pr.empty') }));
   add(main, body);
-  let rep = null; let repMonth = null; let busy = false;
+  let rep = null; let repMonth = null; let busy = false; const selected = new Set();
+  const fShow = select({ label: t('pay.showStaff'), value: 'all', attrs: { 'data-testid': 'pay-show' }, options: [{ value: 'all', label: t('pay.showAll') }, { value: 'active', label: t('pay.showActive') }, { value: 'inactive', label: t('pay.showInactive') }] });
+  fShow.querySelector('select').addEventListener('change', () => { if (rep) render(); });
   const monthVal = () => fMonth.querySelector('input').value;
   // a different month (or filter) invalidates the report and its exports
   const invalidate = () => { if (!rep && !repMonth) return; rep = null; repMonth = null; setExports(false); syncHint();
@@ -66,7 +73,7 @@ export async function renderPayroll(main) {
     fill(body, skeletonCard(t('common.loading')));
     const m = monthVal();
     try {
-      const r = await api('payroll', { month: `${m}-01` }, { timeoutMs: 30000 });
+      const r = await api('payroll_v2', { month: `${m}-01` }, { timeoutMs: 30000 });
       if (monthVal() !== m) { fill(body, emptyState({ iconName: 'fileText', title: t('pr.empty') })); return; } // month changed while loading: discard
       rep = r; repMonth = m;
       render();
@@ -103,36 +110,69 @@ export async function renderPayroll(main) {
 
   function render() {
     fill(body);
+    const ttl = rep.totals_v2; const mParam = rep.month.slice(0, 7);
     add(body, h('header', { class: 'print-header' },
       h('img', { src: MARK_SRC, alt: '', width: '48', height: '46' }),
       h('div', {}, h('strong', {}, t('app.name')),
         h('p', { class: 'text-sm text-muted' }, `${t('pr.title')} · ${monthLabel(rep.month)}`))));
     add(body, h('p', { class: 'text-sm text-muted' }, t('pr.meta', { month: monthLabel(rep.month), tz: rep.timezone, rv: rep.rule_version, at: formatDateTime(rep.generated_at) })),
-      alert(t('pr.netNote'), { tone: 'info' }));
+      alert(t('pay.formulaNote'), { tone: 'info' }));
     if (!rep.rows.length) { add(body, emptyState({ iconName: 'users', title: t('od.noStaff') })); return; }
-    for (const r of rep.rows) {
-      const b = r.points_breakdown;
+    const show = fShow.querySelector('select').value;
+    const rows = rep.rows.filter((r) => show === 'all' || (show === 'active' ? r.active : !r.active));
+    // batch payslips (owner-selected), each on its own page
+    const batchStatus = h('p', { class: 'text-sm text-muted', role: 'status', 'aria-live': 'polite' });
+    const batchBtn = button({ label: t('ps.batch', { n: selected.size }), icon: 'fileText', disabled: !selected.size, onClick: async () => {
+      setLoading(batchBtn, true, t('doc.preparing'));
+      try {
+        const slips = await Promise.all([...selected].map((id) => api('payslip', { employee_id: id, month: rep.month })));
+        if (repMonth !== mParam) return;                      // month changed meanwhile: discard
+        await offerPdf(await payslipsPdf(slips), `hadir-payslips-${mParam}.pdf`, batchStatus);
+      } catch (err) { batchStatus.textContent = `${t('doc.failed')} ${errorMessage(err)}`; }
+      finally { setLoading(batchBtn, false); }
+    } });
+    const batchPrint = button({ label: t('ps.batchPrint'), icon: 'fileText', disabled: !selected.size, onClick: async () => {
+      setLoading(batchPrint, true);
+      try { const slips = await Promise.all([...selected].map((id) => api('payslip', { employee_id: id, month: rep.month })));
+        printDocs(slips.map((sl) => payslipDoc(sl))); batchStatus.textContent = t('doc.printOpened'); }
+      catch (err) { batchStatus.textContent = `${t('doc.failed')} ${errorMessage(err)}`; }
+      finally { setLoading(batchPrint, false); }
+    } });
+    const syncBatch = () => { batchBtn.disabled = batchPrint.disabled = !selected.size;
+      const l = batchBtn.querySelector('.btn__label'); if (l) l.textContent = t('ps.batch', { n: selected.size }); };
+    add(body, card({ body: [h('div', { class: 'form-grid' }, fShow), h('div', { class: 'cluster' }, batchBtn, batchPrint), batchStatus] }));
+    for (const r of rows) {
+      const e = r.entitlement; const b = r.points_breakdown;
       const line = (label, value, strong) => h('div', { class: 'kv-row' }, h('dt', {}, label), h('dd', { class: strong ? 'num strong' : 'num' }, value));
-      add(body, card({ title: displayName(r), subtitle: jobTitle(r) || null,
-        actions: r.incomplete ? badge(t('pr.incomplete'), { tone: 'warning' }) : null,
+      const pick = h('input', { type: 'checkbox', class: 'pick', checked: selected.has(r.employee_id), 'aria-label': t('ps.pick', { name: displayName(r) }),
+        onChange: (ev) => { if (ev.target.checked) selected.add(r.employee_id); else selected.delete(r.employee_id); syncBatch(); } });
+      const tone = { paid: 'success', partial: 'warning', unpaid: 'info', overpaid: 'danger', review: 'danger', nothing_due: 'neutral' }[e.status] || 'neutral';
+      add(body, card({ title: h('span', { class: 'cluster cluster--sm' }, h('label', { class: 'pick-wrap' }, pick), displayName(r)), subtitle: `${r.employee_code}${jobTitle(r) ? ` · ${jobTitle(r)}` : ''}`,
+        actions: h('div', { class: 'cluster cluster--sm' }, r.active ? null : badge(t('emp.inactive'), { tone: 'neutral' }), badge(t(`pay.st.${e.status}`), { tone, dot: true }),
+          r.snapshot ? badge(`${r.snapshot.slip_no}${r.snapshot.changed ? ` · ${t('ps.changedShort')}` : ''}`, { tone: r.snapshot.changed ? 'warning' : 'neutral' }) : null),
         body: [h('dl', { class: 'kv-grid' },
-          line(t('od.salary'), r.monthly_salary_piastres == null ? t('common.notSet') : formatEGP(r.monthly_salary_piastres), true),
-          line(t('pr.hours'), formatMinutes(r.worked_minutes)),
-          line(t('pr.greenAtt'), b.green_attendance), line(t('pr.greenOut'), b.green_outcome),
-          line(t('pr.warnings'), b.red_warnings), line(t('pr.redCharge'), `${b.red_chargeable} · ${formatEGP(b.red_amount_piastres)}`),
-          line(t('pr.blackApproved'), `${b.black_approved} · ${formatEGP(b.black_amount_piastres)}`),
+          line(t('pay.base'), e.base_piastres == null ? t('pay.salaryMissing') : formatEGP(e.base_piastres), true),
+          line(t('pay.earnings'), formatEGP(e.earnings_piastres)),
+          line(t('pay.deductions'), formatEGP(e.deductions_piastres)),
+          line(t('pay.net'), e.net_piastres == null ? '—' : formatEGP(e.net_piastres), true),
+          line(t('pay.salaryPaid'), formatEGP(e.salary_paid_piastres)), line(t('pay.rewardPaid'), formatEGP(e.reward_paid_piastres)),
+          line(t('pay.remaining'), e.remaining_piastres == null ? '—' : formatEGP(e.remaining_piastres), true),
+          line(t('pr.hours'), formatMinutes(r.worked_minutes)), line(t('pr.warnings'), b.red_warnings),
           line(t('pr.blackPending'), `${b.black_pending} / ${b.black_declined}`),
-          line(t('pr.deductions'), formatEGP(r.deductions_piastres), true),
-          line(t('pr.bonus'), formatEGP(r.bonuses_earned_piastres)), line(t('pr.paid'), formatEGP(r.bonuses_paid_piastres)),
-          line(t('pr.net'), formatEGP(r.net_adjustment_piastres), true)),
-          h('p', { class: 'text-sm text-muted' }, h('bdi', { dir: 'ltr', class: 'num' }, t('pr.math', { r: b.red_chargeable, rr: plain(rep.red_penalty_piastres), b: b.black_approved, br: plain(rep.black_penalty_piastres), total: plain(r.deductions_piastres) })), ' ', t('common.egp')),
-          r.unresolved_flags.length ? alert(`${t('od.missing')}: ${r.unresolved_flags.map((f) => f.date).join(', ')}`, { tone: 'warning' }) : null] }));
+          e.pending_rewards_piastres ? line(t('pay.pendingRewards'), formatEGP(e.pending_rewards_piastres)) : null,
+          line(t('pay.netAdjSecondary'), formatEGP(e.net_adjustment_piastres))),
+          e.flags.filter((f) => f !== 'inactive').length ? alert(e.flags.filter((f) => f !== 'inactive').map((f) => t(`pay.flag.${f}`)).join(' · '), { tone: 'warning' }) : null,
+          r.unresolved_flags.length ? alert(`${t('od.missing')}: ${r.unresolved_flags.map((f) => f.date).join(', ')}`, { tone: 'warning' }) : null,
+          h('div', { class: 'cluster no-print' },
+            button({ label: t('ps.open'), size: 'sm', variant: 'primary', icon: 'fileText', onClick: () => navigate(`/owner/payslip?e=${r.employee_id}&m=${mParam}`) }),
+            button({ label: t('emp.statement'), size: 'sm', onClick: () => navigate(`/owner/employee?id=${r.employee_id}`) }),
+            e.salary_set ? button({ label: t('pay.record'), size: 'sm', icon: 'plus', onClick: () => recordPayment({ employee: displayName(r), month: monthLabel(rep.month), entitlement: e, onDone: () => generate() }) }) : null)] }));
     }
-    const tt = totals(rep);
-    add(body, card({ title: t('common.total'), body: h('dl', { class: 'kv-grid' },
-      h('div', { class: 'kv-row' }, h('dt', {}, t('pr.deductions')), h('dd', { class: 'num strong' }, formatEGP(tt.deductions))),
-      h('div', { class: 'kv-row' }, h('dt', {}, t('pr.bonus')), h('dd', { class: 'num' }, formatEGP(tt.earned))),
-      h('div', { class: 'kv-row' }, h('dt', {}, t('pr.paid')), h('dd', { class: 'num' }, formatEGP(tt.paid))),
-      h('div', { class: 'kv-row' }, h('dt', {}, t('pr.net')), h('dd', { class: 'num strong' }, formatEGP(tt.net)))) }));
+    const tt = (label, v, strong) => h('div', { class: 'kv-row' }, h('dt', {}, label), h('dd', { class: strong ? 'num strong' : 'num' }, formatEGP(v)));
+    add(body, card({ title: t('common.total'), body: [h('dl', { class: 'kv-grid' },
+      tt(t('pay.base'), ttl.base_piastres), tt(t('pay.earnings'), ttl.earnings_piastres), tt(t('pay.deductions'), ttl.deductions_piastres),
+      tt(t('pay.net'), ttl.net_piastres, true), tt(t('pay.salaryPaid'), ttl.salary_paid_piastres), tt(t('pay.rewardPaid'), ttl.reward_paid_piastres),
+      tt(t('pay.remaining'), ttl.remaining_piastres, true)),
+      ttl.salary_missing ? alert(t('pay.missingTotals', { n: ttl.salary_missing }), { tone: 'warning' }) : null] }));
   }
 }

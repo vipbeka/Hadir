@@ -9,7 +9,7 @@
  * - Web Push handlers are added in Step 5 (shift reminders).
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'zh-v8';
+const VERSION = 'zh-v9';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const PRECACHE = [
@@ -25,6 +25,7 @@ const PRECACHE = [
   './js/pages/staff/home.js', './js/pages/staff/attendance.js', './js/pages/staff/points.js', './js/pages/staff/requests.js',
   './js/pages/owner/employees.js', './js/pages/owner/dashboard.js', './js/pages/owner/approvals.js', './js/pages/owner/payroll.js', './js/pages/owner/payroll-export.js',
   './js/pages/owner/holidays.js', './js/pages/owner/settings.js', './js/pages/announcements.js',
+  './js/pages/owner/docs.js', './js/pages/owner/payslip.js', './js/pages/owner/employee.js', './js/pages/owner/pay-actions.js', './js/pages/owner/delete-employee.js',
   './vendor/leaflet-1.9.4/leaflet.js', './vendor/leaflet-1.9.4/leaflet.css',
   './i18n/ar.json', './i18n/en.json',
   './vendor/supabase-js-2.119.2/supabase.js',

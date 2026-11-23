@@ -80,7 +80,7 @@ const browser = await chromium.launch();
   check(!(await page.evaluate(() => JSON.stringify(localStorage) + JSON.stringify(sessionStorage) + location.href)).includes('40917263'), 'code not in storage or URL');
   check(await page.locator('tbody tr').count() === 3, 'list refreshed with the new employee');
   // manage: sessions + salary
-  await page.locator('tbody tr', { hasText: 'Ahmed Ali' }).locator('button').click();
+  await page.locator('tbody tr', { hasText: 'Ahmed Ali' }).locator('button', { hasText: 'Edit' }).click();
   await page.waitForSelector('.session-item');
   check(await page.locator('.session-item').count() === 2, 'sessions panel lists devices');
   check(await page.locator('dialog[open]').getByLabel('Monthly salary', { exact: true }).inputValue() === '8000', 'salary shows 8000 EGP for owner');

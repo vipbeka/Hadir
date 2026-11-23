@@ -24,13 +24,19 @@ export async function renderOwnerDashboard(main, { me }) {
       const status = (e) => !e.today ? badge(t('od.absent'), { tone: 'neutral' })
         : e.today.checked_out_at ? badge(t('od.out', { time: formatTime(e.today.checked_out_at) }), { tone: 'info' })
         : badge(t('od.present', { time: formatTime(e.today.checked_in_at) }), { tone: e.today.outcome === 'red' ? 'point-red' : 'success', dot: true });
+      // today's operational view: active staff only; deactivated staff are
+      // listed only on request (their payroll history stays in Payroll)
+      const inactive = d.employees.filter((e) => !e.active);
+      const team = showInactive ? d.employees : d.employees.filter((e) => e.active);
+      const toggle = inactive.length ? button({ label: t(showInactive ? 'od.hideInactive' : 'od.showInactive', { n: inactive.length }), size: 'sm', variant: 'ghost',
+        onClick: () => { showInactive = !showInactive; load(); } }) : null;
       fill(body, 
         h('div', { class: 'stats-grid' },
           tile(t('od.pendingBlack'), d.pending.black, 'black'), tile(t('od.pendingLeave'), d.pending.leave, 'leave'),
           tile(t('od.pendingEarly'), d.pending.early_leave, 'early'), tile(t('od.pendingReward'), d.pending.reward, 'reward'),
           tile(t('od.missing'), d.pending.missing_checkout, 'missing')),
-        h('section', { class: 'section' }, h('h2', { class: 'section__title' }, t('od.team')),
-          d.employees.length ? table({ caption: t('od.team'), captionHidden: true, rows: d.employees, columns: [
+        h('section', { class: 'section' }, h('div', { class: 'cluster', style: { 'justify-content': 'space-between' } }, h('h2', { class: 'section__title' }, t('od.team')), toggle),
+          team.length ? table({ caption: t('od.team'), captionHidden: true, rows: team, columns: [
             { key: 'n', label: t('emp.colName'), render: (e) => h('span', { class: 'name-cell' }, h('strong', {}, displayName(e)), jobTitle(e) ? h('span', { class: 'name-cell__alt' }, jobTitle(e)) : null,
               e.active ? null : badge(t('emp.inactive'), { tone: 'neutral' })) },
             { key: 's', label: t('home.today'), render: status },
@@ -43,5 +49,6 @@ export async function renderOwnerDashboard(main, { me }) {
           ] }) : emptyState({ iconName: 'users', title: t('od.noStaff'), action: button({ label: t('emp.add'), variant: 'primary', onClick: () => navigate('/owner/employees') }) })));
     } catch (err) { fill(body, emptyState({ iconName: 'alertTriangle', title: t('error.title'), text: errorMessage(err), error: true })); }
   }
+  let showInactive = false;
   load();
 }

@@ -47,6 +47,42 @@ function mockApi(state, who, action, p) {
     case 'payroll': return { month: p.month, generated_at: new Date().toISOString(), timezone: 'Africa/Cairo', rule_version: 1, red_penalty_piastres: 5000, black_penalty_piastres: 100000, reward_amount_piastres: 10000, threshold: 30,
       rows: (state.payrollStaff || state.employees.filter((e) => e.role === 'staff')).map((e) => ({ ...e, worked_minutes: 6750, unresolved_flags: [], incomplete: false, deductions_piastres: 105000, bonuses_earned_piastres: 0, bonuses_paid_piastres: 0, net_adjustment_piastres: -105000,
         points_breakdown: { green_attendance: 7, green_outcome: 1, green_manual: 0, green_total: 8, red_warnings: 1, red_chargeable: 1, red_amount_piastres: 5000, black_approved: 1, black_amount_piastres: 100000, black_pending: 0, black_declined: 0 } })) };
+    case 'payroll_v2': {
+      const base = mockApi(state, who, 'payroll', p);
+      const rows = base.rows.map((r) => ({ ...r, employee_id: r.id, employee_code: mockCode(r.id), entitlement: mockEnt(state, r, p.month),
+        snapshot: (state.snapshots || []).filter((x) => x.employee_id === r.id && x.month === p.month).slice(-1).map((x) => ({ version: x.version, slip_no: x.slip_no, kind: x.kind, changed: false }))[0] || null }));
+      const sum = (k) => rows.reduce((a, r) => a + (r.entitlement[k] || 0), 0);
+      return { ...base, rows, month_closed: true, totals_v2: { base_piastres: sum('base_piastres'), earnings_piastres: sum('earnings_piastres'), deductions_piastres: sum('deductions_piastres'),
+        net_piastres: sum('net_piastres'), salary_paid_piastres: sum('salary_paid_piastres'), reward_paid_piastres: sum('reward_paid_piastres'), remaining_piastres: sum('remaining_piastres'),
+        net_adjustment_piastres: sum('net_adjustment_piastres'), salary_missing: rows.filter((r) => !r.entitlement.salary_set).length } };
+    }
+    case 'payslip': {
+      const e = state.employees.find((x) => x.id === p.employee_id); if (!e) throw Object.assign(new Error(), { code: 'not_found' });
+      const snaps = (state.snapshots || []).filter((x) => x.employee_id === e.id && x.month === p.month);
+      if (p.version) { const sn = snaps.find((x) => x.version === Number(p.version)); if (!sn) throw Object.assign(new Error(), { code: 'not_found' }); return { mode: 'snapshot', ...sn }; }
+      return { mode: 'draft', data: mockSlipData(state, e, p.month), draft_ref: `DRAFT-${p.month.slice(0, 4)}${p.month.slice(5, 7)}-${mockCode(e.id)}`, month_closed: true,
+        versions: snaps.map((x) => ({ version: x.version, kind: x.kind, slip_no: x.slip_no, created_at: x.created_at, changed: false })).reverse() };
+    }
+    case 'payslip_finalize': {
+      const e = state.employees.find((x) => x.id === p.employee_id); state.snapshots ??= [];
+      const v = state.snapshots.filter((x) => x.employee_id === e.id && x.month === p.month).length + 1;
+      const sn = { employee_id: e.id, month: p.month, version: v, kind: 'finalized', slip_no: `PS-${p.month.slice(0, 4)}${p.month.slice(5, 7)}-${mockCode(e.id)}-V${v}`, created_at: new Date().toISOString(),
+        data: { ...mockSlipData(state, e, p.month), issued_at: new Date().toISOString() } };
+      state.snapshots.push(sn); return { version: v, slip_no: sn.slip_no, kind: 'finalized' };
+    }
+    case 'salary_payment_record': {
+      state.payments ??= []; (state.paymentCalls ??= []).push(p);
+      const dup = state.payments.find((x) => x.idempotency_key === p.idempotency_key);
+      if (dup) return { payment: dup, duplicate: true };
+      const pay = { id: `pay-${state.payments.length + 1}`, kind: 'payment', employee_id: p.employee_id, month: p.month, amount_piastres: p.amount_piastres, paid_on: p.paid_on,
+        method: p.method || null, reference: p.reference || null, note: p.note || null, idempotency_key: p.idempotency_key };
+      state.payments.push(pay); return { payment: pay, duplicate: false };
+    }
+    case 'salary_payment_reverse': { state.reversals = (state.reversals || 0) + 1; return { reversal: {}, duplicate: false }; }
+    case 'employee_statement': {
+      const e = state.employees.find((x) => x.id === p.employee_id); if (!e) throw Object.assign(new Error(), { code: 'not_found' });
+      return mockStatement(state, e, p.from, p.to);
+    }
     case 'export_raw': {
       const n = state.rawRows ?? 1;
       const attendance = [{ employee: '=cmd()', work_date: today(), checked_in_at: '2026-11-22T07:12:00Z', checked_out_at: '2026-11-22T14:44:00Z' }];
@@ -91,6 +127,54 @@ function mockApi(state, who, action, p) {
   }
 }
 
+
+// ---- payroll v2 / payslip / statement mocks (synthetic data only)
+function mockEnt(state, e, month) {
+  const base = e.monthly_salary_piastres; const set = base != null;
+  const earnings = (state.rewards?.[e.id] ?? [{ id: 'rw-1', kind: 'reward', status: 'approved', amount_piastres: 10000 }]);
+  const deductions = state.deductions?.[e.id] ?? [{ kind: 'red', rate_piastres: 5000, count: 1, amount_piastres: 5000, dates: [`${month.slice(0, 8)}05`] }];
+  const payments = (state.payments || []).filter((x) => x.employee_id === e.id && x.month === month);
+  const earnSum = earnings.reduce((a, r) => a + r.amount_piastres, 0); const dedSum = deductions.reduce((a, r) => a + r.amount_piastres, 0);
+  const rwPaid = earnings.filter((r) => r.status === 'paid').reduce((a, r) => a + r.amount_piastres, 0);
+  const salPaid = payments.reduce((a, x) => a + x.amount_piastres, 0);
+  const net = set ? base + earnSum - dedSum : null; const paid = salPaid + rwPaid; const rem = set ? net - paid : null;
+  const status = !set ? 'review' : rem < 0 ? 'overpaid' : net <= 0 && salPaid === 0 ? (net === 0 ? 'nothing_due' : 'review') : rem === 0 ? 'paid' : salPaid > 0 ? 'partial' : 'unpaid';
+  return { employee_id: e.id, month, currency: 'EGP', base_piastres: base ?? null, salary_set: set, earnings, earnings_piastres: earnSum, pending_rewards_piastres: 0,
+    deductions, deductions_piastres: dedSum, warnings_count: 1, black_pending: 0, black_declined: 0, missing_checkouts: 0, net_piastres: net,
+    net_adjustment_piastres: earnSum - dedSum, salary_paid_piastres: salPaid, reward_paid_piastres: rwPaid, paid_piastres: paid, remaining_piastres: rem,
+    payments: payments.map((x) => ({ ...x, reversed: false })), status, flags: [...(set ? [] : ['salary_missing']), ...(e.active === false ? ['inactive'] : [])], green_points: 8, threshold: 30, rule_version: 1 };
+}
+const mockCode = (id) => `EMP-${id.replace(/-/g, '').slice(-8).toUpperCase()}`;
+function mockSlipData(state, e, month) {
+  return { company: { name_ar: 'حاضر', name_en: 'Hadir' }, employee: { id: e.id, code: mockCode(e.id), name_ar: e.full_name_ar, name_en: e.full_name_en, job_title_ar: e.job_title_ar || 'محاسب', job_title_en: e.job_title_en || 'Accountant', active: e.active },
+    period: { month, from: month, to: `${month.slice(0, 8)}${new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate()}` },
+    rules: { rule_version: 1, red_penalty_piastres: 5000, black_penalty_piastres: 100000, threshold: 30, reward_amount_piastres: 10000, first_red_warning: true },
+    entitlement: mockEnt(state, e, month), attendance: { present_days: 18, late_days: 2, worked_minutes: 8100, absence_days: 0, leave_days: 1 }, generated_at: new Date().toISOString() };
+}
+function mockStatement(state, e, from, to) {
+  const days = []; const today = new Date().toISOString().slice(0, 10);
+  for (let d = new Date(`${from}T12:00:00Z`); d.toISOString().slice(0, 10) <= to; d = new Date(d.getTime() + 864e5)) {
+    const iso = d.toISOString().slice(0, 10); const dow = d.getUTCDay(); const n = d.getUTCDate();
+    let status = 'present'; const row = { date: iso, dow, holiday: null, check_in: '09:12', check_out: '17:05', check_out_date: iso, worked_minutes: 473, missing_checkout: false, outcome: 'green', corrected: false, leave: null, early_leave: null, events: null, deduction_piastres: 0 };
+    if (iso > today) { status = dow === 5 || dow === 6 ? 'weekend' : 'future'; Object.assign(row, { check_in: null, check_out: null, worked_minutes: null }); }
+    else if (iso.endsWith('-10-06')) { status = 'holiday'; Object.assign(row, { holiday: 'عيد القوات المسلحة', check_in: null, check_out: null, worked_minutes: null }); }
+    else if (dow === 5 || dow === 6) { status = 'weekend'; Object.assign(row, { check_in: null, check_out: null, worked_minutes: null }); }
+    else if (n === 5) { status = 'late'; Object.assign(row, { check_in: '10:31', outcome: 'red', events: [{ color: 'red', delta: 1, status: 'active', warning: false, source: 'auto_window', deduction_piastres: 5000, reversed: false }], deduction_piastres: 5000 }); }
+    else if (n === 9) { Object.assign(row, { check_out: null, worked_minutes: null, missing_checkout: true }); }
+    else if (n === 12) { status = 'leave'; Object.assign(row, { check_in: null, check_out: null, worked_minutes: null, leave: [{ type: 'sick', status: 'approved' }] }); }
+    else if (n === 16) { status = 'no_record'; Object.assign(row, { check_in: null, check_out: null, worked_minutes: null }); }
+    else if (n === 19) { Object.assign(row, { check_in: '20:00', check_out: '03:00', check_out_date: new Date(d.getTime() + 864e5).toISOString().slice(0, 10), worked_minutes: 420, corrected: true, corrected_by: 'المالك', correction_reason: 'وردية ليلية' }); }
+    days.push({ ...row, status });
+  }
+  const c = (s) => days.filter((x) => x.status === s).length;
+  return { employee: { id: e.id, code: mockCode(e.id), name_ar: e.full_name_ar, name_en: e.full_name_en, active: e.active }, from, to, today, days,
+    totals: { working_days_elapsed: days.filter((x) => !['weekend', 'holiday', 'future'].includes(x.status)).length, present: c('present') + c('late'), late: c('late'), absent: 0, absent_pending: 0, absence_excused: 0,
+      no_record: c('no_record'), leave_days: c('leave'), worked_minutes: days.reduce((a, x) => a + (x.worked_minutes || 0), 0), missing_checkouts: days.filter((x) => x.missing_checkout).length,
+      deductions_piastres: days.reduce((a, x) => a + x.deduction_piastres, 0) },
+    leave_summary: c('leave') ? [{ type: 'sick', status: 'approved', taken_days: c('leave'), planned_days: 0, requests: 1 }] : [], leave_allowance: 'not_configured',
+    months: [...new Set(days.map((x) => x.date.slice(0, 7)))] };
+}
+
 export async function installMock(context, state = {}) {
   state.revoked ??= new Set();
   state.employees ??= [
@@ -130,7 +214,7 @@ export async function installMock(context, state = {}) {
     }
     if (url.pathname === '/functions/v1/api') {
       if (!sessionOk) return json(401, { error: 'unauthorized' });
-      const ownerOnly = ['owner_dashboard', 'pending', 'decide_black', 'payroll', 'export_raw', 'employee_points', 'award_outcome', 'manual_adjust', 'update_settings', 'save_day', 'save_days', 'save_holiday', 'broadcast', 'list_announcements', 'delete_announcement', 'bot_reports_status', 'save_report_settings', 'sched_ann_list', 'sched_ann_save', 'sched_ann_cancel', 'payroll_summary_resend', 'run_job', 'set_job_title'];
+      const ownerOnly = ['owner_dashboard', 'pending', 'decide_black', 'payroll', 'export_raw', 'employee_points', 'award_outcome', 'manual_adjust', 'update_settings', 'save_day', 'save_days', 'save_holiday', 'broadcast', 'list_announcements', 'delete_announcement', 'bot_reports_status', 'save_report_settings', 'sched_ann_list', 'sched_ann_save', 'sched_ann_cancel', 'payroll_summary_resend', 'payroll_v2', 'payslip', 'payslip_finalize', 'salary_payment_record', 'salary_payment_reverse', 'employee_statement', 'run_job', 'set_job_title'];
       if (ownerOnly.includes(body.action) && who.role !== 'owner') return json(403, { error: 'forbidden' });
       if (body.action === 'telegram_status') return json(200, { data: { connected: false, token_missing: true } });
       const hook = state.hook?.(body.action);
@@ -191,6 +275,25 @@ export async function installMock(context, state = {}) {
         case 'set_salary': { const e = state.employees.find((x) => x.id === body.employee_id); e.monthly_salary_piastres = body.monthly_salary_egp == null ? null : body.monthly_salary_egp * 100; return json(200, { salary: { monthly_salary_piastres: e.monthly_salary_piastres } }); }
         case 'set_active': { const e = state.employees.find((x) => x.id === body.employee_id); e.active = body.active; return json(200, { employee: e }); }
         case 'update': { const e = state.employees.find((x) => x.id === body.employee_id); Object.assign(e, { full_name_ar: body.full_name_ar, full_name_en: body.full_name_en, phone: body.phone || null }); return json(200, { employee: e }); }
+        case 'delete_preview': {
+          const e = state.employees.find((x) => x.id === body.employee_id);
+          if (!e) return json(400, { error: 'not_found' });
+          if (e.role !== 'staff') return json(400, { error: 'cannot_delete_owner' });
+          return json(200, { preview: { employee_id: e.id, name_ar: e.full_name_ar, name_en: e.full_name_en, active: e.active, preview_token: state.previewToken || 'tok-1',
+            counts: { attendance_days: 22, attendance_corrections: 1, point_events: 9, leave_requests: 2, early_leave_requests: 1, reward_requests: 1, payroll_reports: 2,
+              monthly_deductions: 2, payslip_snapshots: 3, salary_payments: 2, salary_record: 1, login_codes: 1, device_sessions: 1, push_subscriptions: 0, login_attempts: 4,
+              absence_alerts: 0, notifications: 5, audit_entries: 7, job_report_lines: 6, owner_reports: 1, telegram_pending: 0, files: 0 } } });
+        }
+        case 'delete': {
+          (state.deleteCalls ??= []).push(body);
+          const e = state.employees.find((x) => x.id === body.employee_id);
+          if (state.deleteChanged && body.preview_token === 'tok-1') { state.previewToken = 'tok-2';
+            return json(400, { error: 'preview_changed', detail: { preview_token: 'tok-2', counts: { attendance_days: 23, point_events: 10, files: 0 } } }); }
+          if (!e || ![e.full_name_ar, e.full_name_en].includes(body.confirm_name)) return json(400, { error: 'confirm_name_mismatch' });
+          state.employees = state.employees.filter((x) => x.id !== e.id);
+          return json(200, { deletion: { deletion_id: 'del-1', employee_id: e.id, status: state.authFails ? 'auth_failed' : 'complete' } });
+        }
+        case 'deletions': return json(200, { deletions: [] });
         default: return json(400, { error: 'unknown_action' });
       }
     }

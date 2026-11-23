@@ -34,6 +34,10 @@ const ACTIONS: Record<string, [string, Role]> = {
   sched_ann_save: ["svc_sched_ann_save", "owner"], sched_ann_cancel: ["svc_sched_ann_cancel", "owner"],
   sched_ann_list: ["svc_sched_ann_list", "owner"], bot_reports_status: ["svc_bot_reports_status", "owner"],
   save_report_settings: ["svc_save_report_settings", "owner"], payroll_summary_resend: ["svc_payroll_summary_resend", "owner"],
+  // payroll v2 (one calculation), payslips, recorded payments, statement
+  payroll_v2: ["svc_payroll_v2", "owner"], payslip: ["svc_payslip", "owner"], payslip_finalize: ["svc_payslip_finalize", "owner"],
+  salary_payment_record: ["svc_salary_payment_record", "owner"], salary_payment_reverse: ["svc_salary_payment_reverse", "owner"],
+  employee_statement: ["svc_employee_statement", "owner"],
 };
 
 serve(async (req, body) => {

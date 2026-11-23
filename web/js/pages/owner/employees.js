@@ -14,6 +14,8 @@ import { button, setLoading } from '../../ui/button.js';
 import { input, select, setFieldError } from '../../ui/field.js';
 import { modal, confirmDialog } from '../../ui/modal.js';
 import { toast } from '../../ui/toast.js';
+import { navigate } from '../../core/router.js';
+import { deleteEmployeeFlow } from './delete-employee.js';
 import { table, badge, emptyState, skeletonCard } from '../../ui/display.js';
 import { showCodeOnce } from '../../ui/code-dialog.js';
 
@@ -69,7 +71,9 @@ export function renderEmployees(main, { me }) {
         { key: 'code', label: t('emp.colCode'), render: (e) => e.code_created_at ? t('emp.codeSet', { date: formatDate(e.code_created_at) }) : t('emp.codeNone') },
         { key: 'salary', label: t('emp.colSalary'), numeric: true, render: (e) => e.monthly_salary_piastres == null
           ? h('span', { class: 'text-muted' }, t('common.notSet')) : h('span', { class: 'num' }, formatEGP(e.monthly_salary_piastres)) },
-        { key: 'act', label: '', render: (e) => button({ label: t('common.edit'), size: 'sm', icon: 'settings', onClick: () => openManage(e) }) },
+        { key: 'act', label: '', render: (e) => h('div', { class: 'cluster cluster--sm row-actions' },
+          button({ label: t('common.edit'), size: 'sm', icon: 'settings', onClick: () => openManage(e) }),
+          e.role === 'staff' ? button({ label: t('emp.statement'), size: 'sm', variant: 'ghost', icon: 'fileText', onClick: () => navigate(`/owner/employee?id=${e.id}`) }) : null) },
       ],
       rows,
     }));
@@ -280,7 +284,11 @@ export function renderEmployees(main, { me }) {
       emp.role === 'staff' ? section(t('emp.points'), pointsHost) : null,
       section(t('emp.sessions'), sessionsHost),
       section(t('emp.salary'), salaryForm),
-      statusBtn ? section(t('emp.statusSection'), h('p', { class: 'text-sm text-muted' }, emp.active ? t('emp.deactivateConfirm') : ''), h('div', {}, statusBtn)) : null);
+      statusBtn ? section(t('emp.statusSection'), h('p', { class: 'text-sm text-muted' }, emp.active ? t('emp.deactivateConfirm') : ''), h('div', {}, statusBtn)) : null,
+      emp.role === 'staff' && !isMe ? section(t('del.section'), h('p', { class: 'text-sm text-muted' }, t('del.sectionText')),
+        h('div', {}, button({ label: t('del.button'), variant: 'danger', icon: 'trash', onClick: () => { m.close('delete');
+          deleteEmployeeFlow(emp, { onDeleted: () => { employees = employees.filter((x) => x.id !== emp.id); renderList(); load(); },
+            onDeactivate: () => openManage(emp) }); } }))) : null);
     m.open();
     loadSessions();
     loadPoints();

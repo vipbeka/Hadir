@@ -8,8 +8,8 @@ import { t, getLang } from '../../core/i18n.js';
 import { formatTime, formatDate, formatEGP, formatMinutes, monthLabel, displayName, jobTitle } from '../../core/format.js';
 import { MARK_SRC } from '../../ui/brand.js';
 
-const VENDOR = new URL('../../../vendor/', import.meta.url).href;
-const FONTS = new URL('../../../assets/fonts/pdf/', import.meta.url).href;
+export const VENDOR = new URL('../../../vendor/', import.meta.url).href;
+export const FONTS = new URL('../../../assets/fonts/pdf/', import.meta.url).href;
 export const MIME = {
   pdf: 'application/pdf',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -22,7 +22,7 @@ const egpNum = (p) => Number(p || 0) / 100;
 const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
 
 const scriptCache = new Map();
-function loadScript(src, globalName) {
+export function loadScript(src, globalName) {
   if (window[globalName]) return Promise.resolve(window[globalName]);
   if (!scriptCache.has(src)) {
     scriptCache.set(src, new Promise((res, rej) => {
@@ -34,14 +34,18 @@ function loadScript(src, globalName) {
   }
   return scriptCache.get(src);
 }
-async function fetchBase64(url) {
-  const buf = await (await fetch(url)).arrayBuffer();
+export async function fetchBase64(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw Object.assign(new Error(`asset ${res.status}`), { code: 'pdf_assets' });
+  const buf = await res.arrayBuffer();
   let bin = ''; const bytes = new Uint8Array(buf);
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 }
-async function fetchDataUrl(url) {
-  const blob = await (await fetch(url)).blob();
+export async function fetchDataUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw Object.assign(new Error(`asset ${res.status}`), { code: 'pdf_assets' });
+  const blob = await res.blob();
   return new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
 }
 
@@ -57,19 +61,25 @@ function cairoStamp(iso) {
 export function summaryRows(rep) {
   const ar = getLang() === 'ar';
   return rep.rows.map((r) => {
-    const b = r.points_breakdown;
+    const b = r.points_breakdown; const e = r.entitlement;
     return {
-      [ar ? 'الموظف' : 'Employee']: safeCell(displayName(r)), [ar ? 'المسمى الوظيفي' : 'Job title']: safeCell(jobTitle(r)),
-      [ar ? 'الراتب الشهري (ج.م)' : 'Monthly salary (EGP)']: r.monthly_salary_piastres == null ? '' : egpNum(r.monthly_salary_piastres),
+      [ar ? 'الموظف' : 'Employee']: safeCell(displayName(r)), [ar ? 'رقم الموظف' : 'Employee ID']: r.employee_code, [ar ? 'المسمى الوظيفي' : 'Job title']: safeCell(jobTitle(r)),
+      [ar ? 'المرتب الأساسي (ج.م)' : 'Base salary (EGP)']: e.base_piastres == null ? (ar ? 'غير مسجل' : 'not set') : egpNum(e.base_piastres),
       [ar ? 'ساعات العمل' : 'Worked hours']: Math.round((r.worked_minutes / 60) * 100) / 100,
       [ar ? 'خضراء حضور' : 'Green attendance']: b.green_attendance, [ar ? 'خضراء إنجاز' : 'Green outcome']: b.green_outcome,
       [ar ? 'إنذارات حمراء' : 'Red warnings']: b.red_warnings, [ar ? 'حمراء بخصم' : 'Chargeable red']: b.red_chargeable,
       [ar ? 'خصم الأحمر (ج.م)' : 'Red deduction (EGP)']: egpNum(b.red_amount_piastres),
       [ar ? 'سوداء معتمدة' : 'Approved black']: b.black_approved, [ar ? 'خصم الأسود (ج.م)' : 'Black deduction (EGP)']: egpNum(b.black_amount_piastres),
       [ar ? 'سوداء معلّقة' : 'Black pending']: b.black_pending, [ar ? 'سوداء مرفوضة' : 'Black declined']: b.black_declined,
-      [ar ? 'إجمالي الخصومات (ج.م)' : 'Total deductions (EGP)']: egpNum(r.deductions_piastres),
-      [ar ? 'مكافأة مستحقة (ج.م)' : 'Earned bonus (EGP)']: egpNum(r.bonuses_earned_piastres), [ar ? 'مدفوع (ج.م)' : 'Paid (EGP)']: egpNum(r.bonuses_paid_piastres),
-      [ar ? 'صافي التسوية (ج.م)' : 'Net adjustment (EGP)']: egpNum(r.net_adjustment_piastres),
+      [ar ? 'إجمالي الخصومات المعتمدة (ج.م)' : 'Approved deductions (EGP)']: egpNum(e.deductions_piastres),
+      [ar ? 'إضافات معتمدة (ج.م)' : 'Approved earnings (EGP)']: egpNum(e.earnings_piastres),
+      [ar ? 'صافي المستحق (ج.م)' : 'Net entitlement (EGP)']: e.net_piastres == null ? '' : egpNum(e.net_piastres),
+      [ar ? 'مدفوع من الراتب (ج.م)' : 'Salary paid (EGP)']: egpNum(e.salary_paid_piastres),
+      [ar ? 'مكافأة مدفوعة منفصلة (ج.م)' : 'Reward paid separately (EGP)']: egpNum(e.reward_paid_piastres),
+      [ar ? 'المتبقي (ج.م)' : 'Remaining (EGP)']: e.remaining_piastres == null ? '' : egpNum(e.remaining_piastres),
+      [ar ? 'الحالة' : 'Status']: t(`pay.st.${e.status}`),
+      [ar ? 'موقوف' : 'Inactive']: r.active === false ? (ar ? 'نعم' : 'yes') : '',
+      [ar ? 'صافي التسوية (ثانوي) (ج.م)' : 'Net adjustment (secondary) (EGP)']: egpNum(e.net_adjustment_piastres),
       [ar ? 'غير مكتمل' : 'Incomplete']: r.incomplete ? (ar ? 'نعم' : 'yes') : '',
     };
   });
@@ -81,12 +91,8 @@ export function rawRows(rows) {
     [k, /_at$/.test(k) && v ? cairoStamp(v) : safeCell(v)])));
 }
 
-export const totals = (rep) => rep.rows.reduce((a, r) => ({
-  deductions: a.deductions + Number(r.deductions_piastres || 0),
-  earned: a.earned + Number(r.bonuses_earned_piastres || 0),
-  paid: a.paid + Number(r.bonuses_paid_piastres || 0),
-  net: a.net + Number(r.net_adjustment_piastres || 0),
-}), { deductions: 0, earned: 0, paid: 0, net: 0 });
+/** Company totals — computed by the server with the same entitlement (totals_v2). */
+export const totals = (rep) => rep.totals_v2;
 
 // ----------------------------------------------------------------- CSV
 export function toCsv(rows) {
@@ -104,7 +110,7 @@ export async function xlsxBlob(rep, raw, onProgress) {
   const ar = getLang() === 'ar';
   const meta = [[t('app.name')],
     [t('pr.meta', { month: monthLabel(rep.month), tz: rep.timezone, rv: rep.rule_version, at: `${formatDate(rep.generated_at)} ${formatTime(rep.generated_at)}` })],
-    [t('pr.netNote')], []];
+    [t('pay.formulaNote')], []];
   const wb = XLSX.utils.book_new();
   if (ar) wb.Workbook = { Views: [{ RTL: true }] };
   const ws = XLSX.utils.aoa_to_sheet(meta);
@@ -208,7 +214,7 @@ export async function pdfBlob(rep, onProgress) {
   metaRow(ar ? 'إصدار القواعد' : 'Rule version', String(rep.rule_version));
   metaRow(ar ? 'وقت الإنشاء' : 'Generated', `${formatDate(rep.generated_at)} ${formatTime(rep.generated_at)}`);
   doc.setFontSize(9); doc.setTextColor(...muted);
-  for (const ln of doc.splitTextToSize(t('pr.netNote'), W - 2 * M)) { text(ln, startX, y, { align: alignStart }); y += 13; }
+  for (const ln of doc.splitTextToSize(t('pay.formulaNote'), W - 2 * M)) { text(ln, startX, y, { align: alignStart }); y += 13; }
   y += 8;
 
   if (!rep.rows.length) {
@@ -231,7 +237,8 @@ export async function pdfBlob(rep, onProgress) {
     y += 6;
     if (jobTitle(r)) { y += 10; doc.setFont('Plex', 'normal'); doc.setFontSize(9); doc.setTextColor(...muted); text(jobTitle(r), startX, y, { align: alignStart }); }
     y += 16;
-    row(t('od.salary'), r.monthly_salary_piastres == null ? t('common.notSet') : formatEGP(r.monthly_salary_piastres), true);
+    const e = r.entitlement;
+    row(t('pay.base'), e.base_piastres == null ? t('pay.salaryMissing') : formatEGP(e.base_piastres), true);
     row(t('pr.hours'), formatMinutes(r.worked_minutes));
     row(t('pr.greenAtt'), String(b.green_attendance));
     row(t('pr.greenOut'), String(b.green_outcome));
@@ -239,10 +246,13 @@ export async function pdfBlob(rep, onProgress) {
     row(t('pr.redCharge'), `${b.red_chargeable} × ${formatEGP(rep.red_penalty_piastres)} = ${formatEGP(b.red_amount_piastres)}`);
     row(t('pr.blackApproved'), `${b.black_approved} × ${formatEGP(rep.black_penalty_piastres)} = ${formatEGP(b.black_amount_piastres)}`);
     row(t('pr.blackPending'), `${b.black_pending} / ${b.black_declined}`);
-    row(t('pr.deductions'), formatEGP(r.deductions_piastres), true);
-    row(t('pr.bonus'), formatEGP(r.bonuses_earned_piastres));
-    row(t('pr.paid'), formatEGP(r.bonuses_paid_piastres));
-    row(t('pr.net'), formatEGP(r.net_adjustment_piastres), true);
+    row(t('pay.earnings'), formatEGP(e.earnings_piastres));
+    row(t('pay.deductions'), formatEGP(e.deductions_piastres));
+    row(t('pay.net'), e.net_piastres == null ? '—' : formatEGP(e.net_piastres), true);
+    row(t('pay.salaryPaid'), formatEGP(e.salary_paid_piastres));
+    row(t('pay.rewardPaid'), formatEGP(e.reward_paid_piastres));
+    row(t('pay.remaining'), e.remaining_piastres == null ? '—' : formatEGP(e.remaining_piastres), true);
+    row(t('pay.netAdjSecondary'), formatEGP(e.net_adjustment_piastres));
     if (r.unresolved_flags?.length) {
       ensure(18); doc.setFontSize(9); doc.setTextColor(181, 71, 8);
       text(`${t('od.missing')}: ${r.unresolved_flags.map((f) => f.date).join(', ')}`, startX, y, { align: alignStart, maxWidth: W - 2 * M }); y += 16;
@@ -257,10 +267,14 @@ export async function pdfBlob(rep, onProgress) {
     doc.setDrawColor(...brand); doc.setLineWidth(1); doc.line(M, y - 6, W - M, y - 6); y += 8;
     doc.setFont('Plex', 'bold'); doc.setFontSize(12); doc.setTextColor(...ink);
     text(t('common.total'), startX, y, { align: alignStart }); y += 20;
-    row(t('pr.deductions'), formatEGP(tt.deductions), true);
-    row(t('pr.bonus'), formatEGP(tt.earned));
-    row(t('pr.paid'), formatEGP(tt.paid));
-    row(t('pr.net'), formatEGP(tt.net), true);
+    row(t('pay.base'), formatEGP(tt.base_piastres));
+    row(t('pay.earnings'), formatEGP(tt.earnings_piastres));
+    row(t('pay.deductions'), formatEGP(tt.deductions_piastres));
+    row(t('pay.net'), formatEGP(tt.net_piastres), true);
+    row(t('pay.salaryPaid'), formatEGP(tt.salary_paid_piastres));
+    row(t('pay.rewardPaid'), formatEGP(tt.reward_paid_piastres));
+    row(t('pay.remaining'), formatEGP(tt.remaining_piastres), true);
+    if (tt.salary_missing) row(t('pay.missingCount'), String(tt.salary_missing));
   }
   // page numbers
   const n = doc.getNumberOfPages();
@@ -278,12 +292,36 @@ export async function pdfBlob(rep, onProgress) {
  * Object URL is revoked after use. Returns { file } so the caller can offer
  * a Share button (needs a fresh user tap) on phones.
  */
+export const isIosStandalone = () => navigator.standalone === true
+  || (/iPad|iPhone|iPod/.test(navigator.userAgent) && window.matchMedia?.('(display-mode: standalone)').matches);
 export function deliver(blob, filename) {
+  const file = typeof File === 'function' ? new File([blob], filename, { type: blob.type }) : null;
+  const canShare = !!(file && navigator.canShare?.({ files: [file] }));
+  // An installed iPhone/iPad app has no back button: following a download
+  // link would trap the user inside the file. There we hand the file to the
+  // share sheet (Save to Files / Print) from a fresh tap instead.
+  if (isIosStandalone()) return { file, canShare, downloaded: false, needsTap: true };
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.rel = 'noopener'; a.style.display = 'none';
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
-  const file = typeof File === 'function' ? new File([blob], filename, { type: blob.type }) : null;
-  return { file, canShare: !!(file && navigator.canShare?.({ files: [file] })) };
+  return { file, canShare, downloaded: true, needsTap: false };
+}
+/** From a user tap: share sheet if possible, else open the file in a new tab. */
+export async function shareOrOpen(file) {
+  if (file && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: file.name }); return 'shared'; }
+    catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }
+  }
+  const url = URL.createObjectURL(file);
+  const w = window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
+  return w ? 'opened' : 'blocked';
+}
+/** A real PDF, not an empty/garbled blob (checked before it is offered). */
+export async function assertPdf(blob) {
+  const head = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+  if (blob.size < 1500 || String.fromCharCode(...head) !== '%PDF-') throw Object.assign(new Error('bad pdf'), { code: 'pdf_invalid' });
+  return blob;
 }

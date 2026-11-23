@@ -69,7 +69,8 @@ const ctxOpts = (geo, perms = ['geolocation']) => ({ viewport: { width: 390, hei
   check(state.calls.some((c) => c.body?.action === 'decide_black' && c.body.params.confirm_amount_piastres === 100000), 'owner confirmation of the amount is sent and stored');
   await page.goto(`${base}/index.html#/owner/payroll`); await page.click('text=Generate report'); await page.waitForSelector('.kv-grid');
   const labels = await page.$$eval('.kv-grid dt', (els) => els.map((e) => e.textContent));
-  check(labels.includes('Monthly salary') && labels.includes('Total deductions') && !labels.some((l) => /net (pay|salary)/i.test(l)), 'payroll shows salary + deductions separately, no "net pay" figure');
+  check(labels.includes('Base salary') && labels.includes('Approved deductions') && labels.includes('Net salary entitlement') && labels.includes('Remaining payable')
+    && labels.includes('Net adjustment (secondary)'), 'payroll shows base, deductions, net entitlement and remaining (net adjustment only as a secondary figure)');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('text=Export Excel')]);
   const xlsxPath = await dl.path();
   check(dl.suggestedFilename().endsWith('.xlsx') && fs.statSync(xlsxPath).size > 1000, 'Excel .xlsx workbook downloaded');
