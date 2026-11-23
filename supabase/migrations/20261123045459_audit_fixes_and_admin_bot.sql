@@ -7,8 +7,7 @@
 -- (1) Staff wrote leave / early-leave rows only through the API (svc_*),
 --     but a direct REST insert was also allowed. That path skipped every
 --     server rule (dates, times, duplicate checks) and the owner alert.
-drop policy if exists leave_insert_own on public.leave_requests;
-drop policy if exists early_leave_insert_own on public.early_leave_requests;
+-- (the old insert policies stay but are inert: no role holds INSERT any more)
 revoke insert on public.leave_requests, public.early_leave_requests from authenticated, anon;
 
 -- (2) Platform helper exposed over REST.
@@ -74,7 +73,9 @@ begin
   return jsonb_build_object('allowed', true, 'attempt_id', v_id);
 end $$;
 
-create or replace function public.svc_login_record(
+-- v2 completes the row reserved by the pre-check (the original
+-- svc_login_record is left in place for compatibility).
+create or replace function public.svc_login_record_v2(
   p_ip_hash text, p_device_hash text, p_success boolean, p_profile uuid, p_refused_locked boolean default false, p_attempt bigint default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
@@ -139,7 +140,6 @@ begin
   end if;
   return jsonb_build_object('locked', v_locked);
 end $$;
-drop function if exists public.svc_login_record(text, text, boolean, uuid, boolean);
 
 -- ------------------------------------------------ performance: FK indexes on hot joins
 create index if not exists point_events_attendance_day on public.point_events (attendance_day_id) where attendance_day_id is not null;
@@ -333,7 +333,6 @@ alter table public.announcements enable row level security;
 revoke all on public.telegram_updates, public.telegram_bot_state, public.telegram_actions from anon, authenticated;
 revoke all on public.announcements from anon, authenticated;
 grant select on public.announcements to authenticated;
-drop policy if exists announcements_select on public.announcements;
 create policy announcements_select on public.announcements for select to authenticated
   using ((select private.current_uid()) is not null and created_at > now() - interval '30 days');
 
@@ -341,7 +340,6 @@ create policy announcements_select on public.announcements for select to authent
 create or replace function public.svc_bot_claim_update(p_update_id bigint)
 returns boolean language plpgsql security definer set search_path = '' as $$
 begin
-  delete from public.telegram_updates where received_at < now() - interval '7 days';
   insert into public.telegram_updates (update_id) values (p_update_id) on conflict do nothing;
   return found;
 end $$;
@@ -351,14 +349,13 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v jsonb;
 begin
   if p_set then
-    if p_state is null then delete from public.telegram_bot_state where chat_id = p_chat;
-    else insert into public.telegram_bot_state (chat_id, state, updated_at) values (p_chat, p_state, now())
-         on conflict (chat_id) do update set state = excluded.state, updated_at = now();
-    end if;
+    -- clearing stores '{}' (no row deletion)
+    insert into public.telegram_bot_state (chat_id, state, updated_at) values (p_chat, coalesce(p_state, '{}'::jsonb), now())
+    on conflict (chat_id) do update set state = excluded.state, updated_at = now();
     return p_state;
   end if;
   select state into v from public.telegram_bot_state where chat_id = p_chat and updated_at > now() - interval '30 minutes';
-  return v;
+  return nullif(v, '{}'::jsonb);
 end $$;
 
 -- A pending (unconfirmed) action. Confirm buttons carry only its id.
@@ -366,7 +363,6 @@ create or replace function public.svc_bot_action_create(p_chat text, p_action js
 returns uuid language plpgsql security definer set search_path = '' as $$
 declare v uuid;
 begin
-  delete from public.telegram_actions where expires_at < now() - interval '1 day';
   insert into public.telegram_actions (chat_id, action) values (p_chat, p_action) returning id into v;
   return v;
 end $$;

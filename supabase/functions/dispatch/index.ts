@@ -34,7 +34,7 @@ async function telegramSetup() {
   const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-webhook`;
   const hook = await tg("setWebhook", { url, secret_token: await webhookSecret(), allowed_updates: ["message", "callback_query"], drop_pending_updates: false });
   const cmds = await tg("setMyCommands", { commands: COMMANDS, scope: { type: "chat", chat_id: Number(ctx.chat_id) } });
-  await tg("setMyCommands", { commands: [], scope: { type: "default" } });   // nothing advertised to strangers
+  await tg("deleteMyCommands", { scope: { type: "default" } });   // nothing advertised to strangers
   const info = await tg("getWebhookInfo", {});
   const r = (info.result ?? {}) as Record<string, unknown>;
   await rpc("svc_bot_setup_done", { p_key: TELEGRAM_SETUP_KEY, p_ok: !!hook.ok && !!cmds.ok && r.url === url,

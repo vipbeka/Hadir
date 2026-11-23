@@ -7,7 +7,7 @@
 // returned ONLY in the create / regenerate_code response, exactly once.
 // =====================================================================
 import { serve, json, str, fail, UUID_RE, PHONE_RE } from "../_shared/http.ts";
-import { admin, rpc } from "../_shared/clients.ts";
+import { rpc } from "../_shared/clients.ts";
 import { requireCaller } from "../_shared/auth.ts";
 import { createEmployee, setActive, regenerateCode, EmployeeError } from "../_shared/employees.ts";
 

@@ -257,7 +257,7 @@ reset role;
 select pg_temp.ok((select bool_and((public.svc_login_precheck('iphash-par', 'devhash-par') ->> 'allowed')::boolean) from generate_series(1, 5)), 'five in-flight login attempts allowed');
 select pg_temp.ok(not (public.svc_login_precheck('iphash-par', 'devhash-par') ->> 'allowed')::boolean, '6th parallel attempt refused before any code is checked');
 select pg_temp.ok((public.svc_login_precheck('iphash-ok', 'devhash-ok') ->> 'attempt_id') is not null, 'pre-check reserves an attempt row');
-select public.svc_login_record('iphash-ok', 'devhash-ok', true, '00000000-0000-4000-b000-00000000000a', false,
+select public.svc_login_record_v2('iphash-ok', 'devhash-ok', true, '00000000-0000-4000-b000-00000000000a', false,
   (select max(id) from public.login_attempts where client_ip_hash = 'iphash-ok'));
 select pg_temp.ok((select count(*) from public.login_attempts where client_ip_hash = 'iphash-ok') = 1
   and (select bool_and(success) from public.login_attempts where client_ip_hash = 'iphash-ok'), 'successful login completes the reserved row (no double count)');

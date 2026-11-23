@@ -1,4 +1,4 @@
--- Rollback of 20261123120000_audit_fixes_and_admin_bot (restores previous definitions)
+-- Rollback of 20261123045459_audit_fixes_and_admin_bot (restores previous definitions)
 
 drop function if exists public.svc_bot_claim_update(bigint);
 
@@ -31,9 +31,7 @@ grant insert (employee_id, from_date, to_date, type, reason) on public.leave_req
 
 grant insert (employee_id, work_date, requested_leave_time, reason) on public.early_leave_requests to authenticated;
 
-create policy leave_insert_own on public.leave_requests for insert to authenticated with check (employee_id = (select private.current_uid()));
 
-create policy early_leave_insert_own on public.early_leave_requests for insert to authenticated with check (employee_id = (select private.current_uid()));
 
 alter function private.touch_updated_at() reset search_path;
 
@@ -47,7 +45,7 @@ alter function private.err(text, jsonb) reset search_path;
 
 alter function private.fmt12(time, text) reset search_path;
 
-drop function if exists public.svc_login_record(text, text, boolean, uuid, boolean, bigint);
+drop function if exists public.svc_login_record_v2(text, text, boolean, uuid, boolean, bigint);
 
 create or replace function private.enqueue_owner_alert(p_event text, p_dedupe text, p_payload jsonb, p_ref text default null)
 returns void
@@ -79,67 +77,7 @@ begin
   return jsonb_build_object('allowed', true);
 end $$;
 
-create or replace function public.svc_login_record(
-  p_ip_hash text, p_device_hash text, p_success boolean, p_profile uuid, p_refused_locked boolean default false)
-returns jsonb
-language plpgsql security definer set search_path = ''
-as $$
-declare
-  s public.settings := private.settings();
-  v_fail_ip int; v_fail_dev int; v_fail_global int;
-  v_level int; v_minutes int; v_key text; v_locked boolean := false;
-begin
-  insert into public.login_attempts (client_ip_hash, device_id_hash, success, refused_locked, matched_profile_id)
-  values (p_ip_hash, p_device_hash, p_success, p_refused_locked, case when p_success then p_profile end);
 
-  if p_success or p_refused_locked then
-    return jsonb_build_object('locked', false);
-  end if;
-
-  -- failures since the last success / lockout window, per key
-  select count(*) into v_fail_ip from public.login_attempts a
-   where a.client_ip_hash = p_ip_hash and not a.success and not a.refused_locked
-     and a.attempted_at > now() - make_interval(mins => s.lockout_window_min)
-     and a.attempted_at > coalesce((select max(l.created_at) from public.login_lockouts l where l.key_hash = p_ip_hash), '-infinity');
-  select count(*) into v_fail_dev from public.login_attempts a
-   where a.device_id_hash = p_device_hash and not a.success and not a.refused_locked
-     and a.attempted_at > now() - make_interval(mins => s.lockout_window_min)
-     and a.attempted_at > coalesce((select max(l.created_at) from public.login_lockouts l where l.key_hash = p_device_hash), '-infinity');
-
-  if greatest(v_fail_ip, v_fail_dev) >= s.lockout_max_failures then
-    v_key := case when v_fail_ip >= v_fail_dev then p_ip_hash else p_device_hash end;
-    -- escalation: count this key's lockouts in the last 24h
-    select count(*) + 1 into v_level from public.login_lockouts
-     where key_hash in (p_ip_hash, p_device_hash) and created_at > now() - interval '24 hours';
-    v_minutes := s.lockout_durations_min[least(v_level, cardinality(s.lockout_durations_min))];
-    insert into public.login_lockouts (scope, key_hash, level, locked_until)
-    values ('client', p_ip_hash, v_level, now() + make_interval(mins => v_minutes));
-    if p_device_hash <> p_ip_hash then
-      insert into public.login_lockouts (scope, key_hash, level, locked_until)
-      values ('client', p_device_hash, v_level, now() + make_interval(mins => v_minutes));
-    end if;
-    v_locked := true;
-    perform private.enqueue_owner_alert('security',
-      'lockout:' || left(v_key, 16) || ':' || to_char(now(), 'YYYYMMDDHH24MI'),
-      jsonb_build_object('kind', 'client_lockout', 'level', v_level, 'minutes', v_minutes,
-                         'failures', greatest(v_fail_ip, v_fail_dev), 'at', now()));
-  end if;
-
-  -- global throttle across all clients
-  select count(*) into v_fail_global from public.login_attempts a
-   where not a.success and not a.refused_locked and a.attempted_at > now() - interval '1 hour';
-  if v_fail_global >= s.global_failure_limit_per_hour
-     and not exists (select 1 from public.login_lockouts where key_hash = 'global' and locked_until > now()) then
-    insert into public.login_lockouts (scope, key_hash, level, locked_until)
-    values ('global', 'global', 1, now() + interval '15 minutes');
-    perform private.enqueue_owner_alert('security',
-      'global_throttle:' || to_char(now(), 'YYYYMMDDHH24MI'),
-      jsonb_build_object('kind', 'global_throttle', 'failures_last_hour', v_fail_global, 'minutes', 15, 'at', now()));
-    v_locked := true;
-  end if;
-
-  return jsonb_build_object('locked', v_locked);
-end $$;
 
 create or replace function public.svc_check_in(p_actor uuid, p jsonb)
 returns jsonb language plpgsql security definer set search_path = '' as $$
@@ -268,7 +206,3 @@ begin
   perform private.audit(p_actor, 'leave.' || v_status, 'leave_requests', a.id::text, to_jsonb(b), to_jsonb(a), p ->> 'comment');
   return jsonb_build_object('result', 'decided', 'status', a.status, 'absences_cleared', v_n);
 end $$;
-
-revoke all on function public.svc_login_record(text, text, boolean, uuid, boolean) from public, anon, authenticated;
-
-grant execute on function public.svc_login_record(text, text, boolean, uuid, boolean) to service_role;

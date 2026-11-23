@@ -1,29 +1,11 @@
 // =====================================================================
 // Zintra حاضر — login (code-only)
-// ---------------------------------------------------------------------
-// SECURITY TRADE-OFF (also in the README): code-only login is convenient
-// (one number, no email accounts, nothing else to remember) but weaker
-// than an identifier + password, because the whole numeric code space is
-// shared by everyone. That is why these controls are MANDATORY and must
-// never be weakened for convenience:
-//   * codes are random (CSPRNG), 8 digits by default, unique, stored only
-//     as salted bcrypt hashes, verified here on the server only;
-//   * every failure returns the same generic error with similar timing;
-//   * per-client (IP and device) lockout after N failures with escalating
-//     delays, a global hourly failure throttle, and a Telegram alert to
-//     the owner (never containing a submitted code);
-//   * attempts store HMAC'd client identifiers only, never codes;
-//   * codes are shown once to the owner and never again.
-//
-// SESSION DESIGN — option (B), a real Supabase Auth session:
-// after the code matches, we mint a genuine session for that profile's
-// Auth user (admin.generateLink type "magiclink" → server-side verifyOtp
-// with the hashed token; no email is ever sent and the user has no
-// password). Why B over a hand-minted JWT (A): refresh-token rotation,
-// auth.uid() for RLS, per-session revocation and expiry handling come
-// built in and battle-tested; A would need custom refresh, revocation
-// lists and expiry logic. The role lives in profiles (source of truth)
-// and is mirrored in app_metadata.role for routing.
+// Codes are random 8-digit, stored only as bcrypt hashes and verified here.
+// Lockout: the pre-check reserves an attempt row per request under a
+// per-client advisory lock, so parallel requests cannot exceed the
+// failure allowance; svc_login_record_v2 completes that row.
+// Session: a real Supabase Auth session minted server-side (magiclink
+// hashed token -> verifyOtp; no email is ever sent).
 // =====================================================================
 import { serve, json, str, fail } from "../_shared/http.ts";
 import { admin, anonClient, rpc, serviceKeyForHmac } from "../_shared/clients.ts";
@@ -74,7 +56,7 @@ serve(async (req, body) => {
   const pre = await rpc<{ allowed: boolean; retry_after_s?: number; attempt_id?: number }>("svc_login_precheck", { p_ip_hash: ipHash, p_device_hash: devHash });
   if (!pre.allowed) {
     // A correct code is refused too while locked out (we don't even check it).
-    await rpc("svc_login_record", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: false, p_profile: null, p_refused_locked: true });
+    await rpc("svc_login_record_v2", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: false, p_profile: null, p_refused_locked: true });
     await padTo(started);
     return json(req, { error: "locked_out", retry_after_s: pre.retry_after_s ?? 900 }, 429);
   }
@@ -83,7 +65,7 @@ serve(async (req, body) => {
   const match = code ? matchCode(code, candidates) : (matchCode("000000000000", candidates), null);
 
   if (!match || !match.active) {
-    const rec = await rpc<{ locked: boolean }>("svc_login_record", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: false, p_profile: null, p_attempt: pre.attempt_id ?? null });
+    const rec = await rpc<{ locked: boolean }>("svc_login_record_v2", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: false, p_profile: null, p_attempt: pre.attempt_id ?? null });
     await padTo(started);
     // Same message whether the code is malformed, unknown, or belongs to a
     // deactivated person. If this failure tripped the lockout, say so.
@@ -100,7 +82,7 @@ serve(async (req, body) => {
 
   const session = verified!.session!;
   const sessionId = String(jwtPayload(session.access_token).session_id ?? "");
-  await rpc("svc_login_record", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: true, p_profile: match.profile_id, p_attempt: pre.attempt_id ?? null });
+  await rpc("svc_login_record_v2", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: true, p_profile: match.profile_id, p_attempt: pre.attempt_id ?? null });
   await rpc("svc_login_success", {
     p_profile: match.profile_id, p_session: sessionId,
     p_user_agent: uaSummary(req.headers.get("user-agent") ?? ""), p_approx_ip: approxIp(clientIp(req)),
