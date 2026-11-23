@@ -1,5 +1,5 @@
 // =====================================================================
-// Zintra حاضر — api (single entry point for staff + owner actions)
+// حاضر (Hadir) — api (single entry point for staff + owner actions)
 // The caller is authenticated (requireCaller); the action decides the
 // required role; the SQL function (svc_*) enforces every business rule
 // on the database clock. Errors 'ZH:<code>' map to { error: code }.
@@ -23,9 +23,13 @@ const ACTIONS: Record<string, [string, Role]> = {
   decide_early_leave: ["svc_decide_early_leave", "owner"], decide_reward: ["svc_decide_reward", "owner"],
   award_outcome: ["svc_award_outcome", "owner"], manual_adjust: ["svc_manual_adjust", "owner"],
   correct_attendance: ["svc_correct_attendance", "owner"], update_settings: ["svc_update_settings", "owner"],
-  save_day: ["svc_save_day", "owner"], save_holiday: ["svc_save_holiday", "owner"],
+  // save_day keeps working for older clients but goes through the atomic
+  // multi-day save, so omitted point flags are inherited (never reset).
+  save_day: ["svc_save_days", "owner"], save_days: ["svc_save_days", "owner"], save_holiday: ["svc_save_holiday", "owner"],
   payroll: ["svc_payroll", "owner"], export_raw: ["svc_export_raw", "owner"], employee_points: ["svc_employee_points", "owner"],
   run_job: ["svc_run_job", "owner"], set_job_title: ["svc_set_job_title", "owner"],
+  broadcast: ["svc_broadcast", "owner"], list_announcements: ["svc_list_announcements", "owner"],
+  delete_announcement: ["svc_delete_announcement", "owner"],
 };
 
 serve(async (req, body) => {
@@ -60,7 +64,9 @@ serve(async (req, body) => {
   if (role === "owner" && caller.role !== "owner") fail(403, "forbidden");
   if (role === "staff" && caller.role !== "staff") fail(403, "staff_only");
 
-  const { data, error } = await admin.rpc(fn, { p_actor: caller.id, p });
+  const params = action === "save_day" ? { days: [p] }
+    : action === "delete_announcement" ? { id: p.id, via: "web" } : p;
+  const { data, error } = await admin.rpc(fn, { p_actor: caller.id, p: params });
   if (error) {
     const m = /^ZH:([a-z_]+)$/.exec(error.message ?? "");
     if (m) {

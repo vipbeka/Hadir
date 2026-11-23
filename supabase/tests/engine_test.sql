@@ -42,8 +42,36 @@ select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '06:5
 select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '07:00')) = 'green', 'exactly at window start → green');
 select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '08:00')) = 'none', 'exactly at window end (gap follows) → no point');
 select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '08:30')) = 'none', 'between windows → no point');
-select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '10:00')) = 'green', 'Normal end = Late start → green (Late)');
-select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '10:59:59')) = 'green', 'just before last end → green');
+select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '09:59:59')) = 'green', 'just before Normal end → green');
+select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '10:00')) = 'red', 'Normal end = Late start → RED (Late window gives red)');
+select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '10:59:59')) = 'red', 'just before last end → red (Late)');
+-- Late window gives red on EVERY work day, never green
+select pg_temp.ok((select bool_and(not w.awards_green_point and w.awards_red_point) from public.check_in_windows w
+  join public.day_rules r using (day_of_week) where r.is_work_day and w.label_ar = 'متأخر'), 'Late window: green OFF + red ON on all work days');
+select pg_temp.ok((select bool_and((select outcome from private.evaluate_time(d::date, '10:30')) = 'red')
+  from generate_series('2026-11-22'::date, '2026-11-26'::date, '1 day') d), 'Late 10:30 → red on Sun..Thu');
+-- save_days: explicit false stays false; omitted flags inherit; all-or-nothing
+select public.svc_save_days(null, '{"days":[{"day_of_week":2,"windows":[
+  {"label_ar":"مبكر","label_en":"Early","start":"07:00","end":"08:00","enabled":true,"awards_green_point":true,"awards_red_point":false},
+  {"label_ar":"عادي","label_en":"Normal","start":"09:00","end":"10:00","enabled":true,"awards_green_point":false,"awards_red_point":false},
+  {"label_ar":"متأخر","label_en":"Late","start":"10:00","end":"11:00","enabled":true}]}]}');
+select pg_temp.ok((select not awards_green_point and not awards_red_point from public.check_in_windows where day_of_week = 2 and label_ar = 'عادي'), 'save_days keeps an explicit false');
+select pg_temp.ok((select not awards_green_point and awards_red_point from public.check_in_windows where day_of_week = 2 and label_ar = 'متأخر'), 'save_days: omitted flags inherit the Late red');
+select pg_temp.expect_err($$select public.svc_save_days(null, '{"days":[{"day_of_week":3,"windows":[{"label_ar":"x","label_en":"x","start":"07:00","end":"08:00","awards_green_point":true,"awards_red_point":true}]}]}')$$,
+  'invalid_window', 'green and red together refused');
+select pg_temp.expect_err($$select public.svc_save_days(null, '{"days":[{"day_of_week":3,"windows":[{"label_ar":"x","label_en":"x","start":"07:00","end":"08:00"}]},{"day_of_week":4,"windows":[{"label_ar":"a","label_en":"a","start":"09:00","end":"10:00"},{"label_ar":"b","label_en":"b","start":"09:30","end":"11:00"}]}]}')$$,
+  'windows_overlap', 'one bad day rejects the whole save');
+select pg_temp.ok((select count(*) from public.check_in_windows where day_of_week = 3) = 3, 'failed save left day 3 untouched (atomic)');
+select public.svc_save_days(null, '{"days":[{"day_of_week":2,"windows":[
+  {"label_ar":"مبكر","label_en":"Early","start":"07:00","end":"08:00","enabled":true,"awards_green_point":true,"awards_red_point":false},
+  {"label_ar":"عادي","label_en":"Normal","start":"09:00","end":"10:00","enabled":true,"awards_green_point":true,"awards_red_point":false},
+  {"label_ar":"متأخر","label_en":"Late","start":"10:00","end":"11:00","enabled":true,"awards_green_point":false,"awards_red_point":true}]}]}');
+-- weekly summary day is never empty
+select pg_temp.ok((select weekly_summary_dow from public.settings where id) between 0 and 6, 'weekly summary day persisted (not empty)');
+select pg_temp.expect_err($$select public.svc_update_settings(null, '{"weekly_summary_dow":null}')$$, 'invalid_settings', 'empty weekly summary day refused');
+-- 2027 holidays: lunar ones provisional, fixed ones confirmed, no duplicates
+select pg_temp.ok((select count(*) from public.public_holidays where extract(year from holiday_date) = 2027 and provisional) = 9, '9 lunar 2027 dates are provisional');
+select pg_temp.ok((select count(*) from public.public_holidays where holiday_date in ('2027-01-07','2027-10-06') and not provisional) = 2, 'fixed 2027 dates confirmed');
 select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '11:00')) = 'red', 'exactly at last window end → red');
 select pg_temp.ok((select outcome from private.evaluate_time('2026-11-22', '16:00')) = 'red', 'after last window → red');
 select pg_temp.ok((select outcome from private.evaluate_time('2026-11-27', '12:00')) = 'none'
@@ -292,7 +320,19 @@ select pg_temp.ok(public.svc_bot_state('1360140225') is null, 'conversation stat
 select pg_temp.ok(jsonb_array_length(public.svc_bot_today(null) -> 'people') = 3, '/today lists every active employee');
 select pg_temp.ok((select count(*) from jsonb_array_elements(public.svc_bot_points(null) -> 'rows')) = 3, '/points standings for every active employee');
 select pg_temp.ok((public.svc_broadcast('00000000-0000-4000-b000-000000000001', '{"text":"اجتماع الساعة 10"}') ->> 'people')::int = 3, 'broadcast reaches every active employee');
-select pg_temp.expect_err($$select public.svc_broadcast(null, '{"text":"  "}')$$, 'invalid_text', 'empty broadcast refused');
+select pg_temp.expect_err($$select public.svc_broadcast('00000000-0000-4000-b000-000000000001', '{"text":"  "}')$$, 'invalid_text', 'empty broadcast refused');
+select pg_temp.expect_err($$select public.svc_broadcast('00000000-0000-4000-b000-00000000000a', '{"text":"hi"}')$$, 'forbidden', 'staff cannot broadcast');
+select pg_temp.expect_err($$select public.svc_delete_announcement('00000000-0000-4000-b000-00000000000a', jsonb_build_object('id', (select id from public.announcements limit 1)))$$, 'forbidden', 'staff cannot delete an announcement');
+select pg_temp.expect_err($$select public.svc_list_announcements('00000000-0000-4000-b000-00000000000a', '{}')$$, 'forbidden', 'staff cannot list via owner API');
+select pg_temp.ok((public.svc_broadcast('00000000-0000-4000-b000-000000000001', '{"text":"fixture to delete","title":"عنوان"}') ->> 'id') is not null, 'broadcast with title');
+select pg_temp.ok((select array_agg(x ->> 'id' order by o) from jsonb_array_elements(public.svc_list_announcements('00000000-0000-4000-b000-000000000001', '{}') -> 'rows') with ordinality t(x, o))
+  = (select array_agg(id::text order by created_at desc, id desc) from public.announcements), 'list newest first, id tie-break');
+do $$ declare v uuid := (select id from public.announcements where body = 'fixture to delete'); begin
+  perform pg_temp.ok((public.svc_delete_announcement('00000000-0000-4000-b000-000000000001', jsonb_build_object('id', v)) ->> 'deleted')::boolean, 'owner deletes announcement');
+  perform pg_temp.ok(not (public.svc_delete_announcement('00000000-0000-4000-b000-000000000001', jsonb_build_object('id', v)) ->> 'deleted')::boolean, 'second delete is a no-op (double tap)');
+  perform pg_temp.ok(not exists (select 1 from public.notification_outbox where dedupe_key like 'announcement:' || v || ':%' and status = 'pending'), 'queued pushes cancelled');
+end $$;
+select pg_temp.expect_err($$select public.svc_delete_announcement('00000000-0000-4000-b000-000000000001', '{"id":"not-a-uuid"}')$$, 'not_found', 'tampered id rejected');
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-b000-00000000000a","session_id":"20000000-0000-4000-b000-00000000000a","role":"authenticated"}', true);
 set local role authenticated;
 select pg_temp.ok((select count(*) from public.announcements) = 1, 'staff can read the announcement');
@@ -305,5 +345,27 @@ do $$ begin
   raise exception 'ASSERTION FAILED: staff read bot actions';
 exception when insufficient_privilege then raise notice 'ok: bot tables are service-role only'; end $$;
 reset role;
+
+-- Late window end-to-end: a check-in at 10:00 / 10:59 on each work day of the
+-- last week gives exactly ONE red point; 09:59 gives green; 11:00 is red.
+do $$ declare d date; v_today date := (now() at time zone 'Africa/Cairo')::date; r jsonb; n int := 0; t text; begin
+  for d in select g::date from generate_series(v_today - 7, v_today - 1, interval '1 day') g
+            where extract(dow from g) in (select day_of_week from public.day_rules where is_work_day)
+              and extract(dow from g) <> extract(dow from v_today)  -- today's windows are reconfigured by earlier tests
+              and not exists (select 1 from public.public_holidays h where h.holiday_date = g::date and h.enabled) loop
+    t := case n % 2 when 0 then '10:00' else '10:59' end;
+    r := public.svc_manual_check_in('00000000-0000-4000-b000-000000000001',
+      jsonb_build_object('employee_id', '00000000-0000-4000-b000-00000000000c', 'date', d, 'time', t, 'reason', 'late test'));
+    perform pg_temp.ok(r ->> 'outcome' = 'red', format('Late check-in %s %s (dow %s) → red', d, t, extract(dow from d)));
+    perform pg_temp.ok((select count(*) from public.point_events pe join public.attendance_days a on a.id = pe.attendance_day_id
+       where a.employee_id = '00000000-0000-4000-b000-00000000000c' and a.work_date = d) = 1, 'exactly one point event');
+    n := n + 1;
+  end loop;
+  perform pg_temp.ok(n >= 3, 'late test covered the work days');
+end $$;
+select pg_temp.ok((select count(*) filter (where warning_only) from public.point_events
+  where employee_id = '00000000-0000-4000-b000-00000000000c' and color = 'red' and delta > 0 and status = 'active'
+    and reward_period = (select max(reward_period) from public.point_events where employee_id = '00000000-0000-4000-b000-00000000000c')) <= 1,
+  'first-red warning policy still applies (at most one warning per period)');
 
 select 'ENGINE TESTS PASSED' as result;

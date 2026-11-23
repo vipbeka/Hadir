@@ -57,6 +57,22 @@ function mockApi(state, who, action, p) {
     case 'award_outcome': return { event_id: 'e' };
     case 'manual_adjust': return { previous: 1, total: 2, events: [] };
     case 'telegram_status': return null;
+    case 'update_settings': if (!state.db) return p; Object.assign(state.db.settings, p, { updated_at: new Date().toISOString() }); return { ...state.db.settings };
+    case 'save_day': case 'save_days': {
+      const days = p.days || [p];
+      if (!state.db) return { days };
+      for (const d of days) {
+        Object.assign(state.db.day_rules.find((r) => r.day_of_week === d.day_of_week), { is_work_day: d.is_work_day, check_in_enabled: d.check_in_enabled, points_enabled: d.points_enabled });
+        state.db.check_in_windows = state.db.check_in_windows.filter((w) => w.day_of_week !== d.day_of_week).concat((d.windows || []).map((w) => ({
+          day_of_week: d.day_of_week, label_ar: w.label_ar, label_en: w.label_en, start_time: `${w.start}:00`, end_time: `${w.end}:00`, enabled: w.enabled,
+          awards_green_point: !!w.awards_green_point, awards_red_point: !!w.awards_red_point })));
+      }
+      (state.saves ??= []).push(days);
+      return { days };
+    }
+    case 'broadcast': { const a = { id: `a${Date.now()}${Math.random().toString(16).slice(2, 6)}`, title: p.title || null, body: p.text, created_at: new Date().toISOString() }; state.announcements.unshift(a); return { id: a.id, people: 1, devices: 0 }; }
+    case 'list_announcements': return { total: state.announcements.length, rows: [...state.announcements].sort((x, y) => y.created_at.localeCompare(x.created_at) || y.id.localeCompare(x.id)) };
+    case 'delete_announcement': { const i = state.announcements.findIndex((a) => a.id === p.id); if (i < 0) return { id: p.id, deleted: false }; state.announcements.splice(i, 1); return { id: p.id, deleted: true }; }
     default: return { result: 'decided' };
   }
 }
@@ -100,7 +116,7 @@ export async function installMock(context, state = {}) {
     }
     if (url.pathname === '/functions/v1/api') {
       if (!sessionOk) return json(401, { error: 'unauthorized' });
-      const ownerOnly = ['owner_dashboard', 'pending', 'decide_black', 'payroll', 'export_raw', 'employee_points', 'award_outcome', 'manual_adjust', 'update_settings', 'save_day', 'save_holiday', 'run_job', 'set_job_title'];
+      const ownerOnly = ['owner_dashboard', 'pending', 'decide_black', 'payroll', 'export_raw', 'employee_points', 'award_outcome', 'manual_adjust', 'update_settings', 'save_day', 'save_days', 'save_holiday', 'broadcast', 'list_announcements', 'delete_announcement', 'run_job', 'set_job_title'];
       if (ownerOnly.includes(body.action) && who.role !== 'owner') return json(403, { error: 'forbidden' });
       if (body.action === 'telegram_status') return json(200, { data: { connected: false, token_missing: true } });
       const hook = state.hook?.(body.action);
@@ -117,22 +133,23 @@ export async function installMock(context, state = {}) {
       if (state.leaderboard) return json(200, state.leaderboard);
       return json(200, state.employees.filter((e) => e.role === 'staff').map((e, i) => ({ rank: i + 1, full_name_ar: e.full_name_ar, full_name_en: e.full_name_en, job_title_ar: 'محاسب', job_title_en: 'Accountant', green: 7 - i, threshold: 30, is_me: e.id === who?.id })));
     }
-    const tableData = {
+    const tableData = state.db ??= {
       announcements: state.announcements ?? [],
       point_events: [{ color: 'green', delta: 1, source: 'auto_window', reason: 'check-in 09:12', status: 'active', effective_work_date: today(), deduction_amount_piastres: 0 },
         { color: 'red', delta: 1, source: 'auto_window', reason: 'late', status: 'active', warning_only: true, effective_work_date: today(), deduction_amount_piastres: 0 }],
       leave_requests: [{ id: 'l1', type: 'personal', from_date: today(), to_date: today(), status: 'approved', reason: 'family' }],
       early_leave_requests: [{ id: 7, work_date: today(), requested_leave_time: '15:00:00', status: 'pending' }],
       public_holidays: [{ id: 'h1', holiday_date: '2026-10-06', name_ar: 'عيد القوات المسلحة', name_en: 'Armed Forces Day', kind: 'official', enabled: true },
-        { id: 'h2', holiday_date: '2027-01-07', name_ar: 'عيد الميلاد المجيد', name_en: 'Coptic Christmas', kind: 'official', enabled: false }],
+        { id: 'h2', holiday_date: '2027-01-07', name_ar: 'عيد الميلاد المجيد', name_en: 'Coptic Christmas', kind: 'official', enabled: false }, { id: 'h3', holiday_date: '2027-03-10', name_ar: 'عيد الفطر (اليوم الأول)', name_en: 'Eid al-Fitr (day 1)', kind: 'official', enabled: true, provisional: true }],
       settings: { id: true, rule_version: 3, updated_at: new Date().toISOString(), red_penalty_piastres: 5000, black_penalty_piastres: 100000, green_reward_threshold: 30, reward_amount_piastres: 10000,
         first_red_warning: true, work_start_time: '09:00:00', work_end_time: '17:00:00', absence_cutoff: '11:30:00', geofence_lat: 29.9831944, geofence_lng: 31.3239444, geofence_radius_m: 100,
-        owner_telegram_chat_id: '1360140225', owner_alert_channel: 'telegram', digest_enabled: true, digest_time: '12:00:00', weekly_summary_enabled: true, weekly_summary_dow: null, weekly_summary_time: '18:00:00',
+        owner_telegram_chat_id: '1360140225', owner_alert_channel: 'telegram', digest_enabled: true, digest_time: '12:00:00', weekly_summary_enabled: true, weekly_summary_dow: state.weeklyDow === undefined ? null : state.weeklyDow, weekly_summary_time: '18:00:00',
         shift_reminders_default: true, shift_reminder_lead_min: 15, missed_checkin_reminder_enabled: true, missed_checkin_lead_min: 15, leaderboard_visible: true },
       day_rules: [0, 1, 2, 3, 4, 5, 6].map((d) => ({ day_of_week: d, is_work_day: d < 5, check_in_enabled: d < 5, points_enabled: d < 5 })),
       check_in_windows: [0, 1, 2, 3, 4].flatMap((d) => [['مبكر', 'Early', '07:00:00', '08:00:00'], ['عادي', 'Normal', '09:00:00', '10:00:00'], ['متأخر', 'Late', '10:00:00', '11:00:00']]
-        .map(([a, e, s1, e1]) => ({ day_of_week: d, label_ar: a, label_en: e, start_time: s1, end_time: e1, enabled: true, awards_green_point: true }))),
+        .map(([a, e, s1, e1]) => ({ day_of_week: d, label_ar: a, label_en: e, start_time: s1, end_time: e1, enabled: true, awards_green_point: a !== 'متأخر', awards_red_point: a === 'متأخر' }))),
     };
+    state.announcements = tableData.announcements;
     const tname = url.pathname.replace('/rest/v1/', '');
     if (tableData[tname] !== undefined) {
       if (!sessionOk) return json(200, []);

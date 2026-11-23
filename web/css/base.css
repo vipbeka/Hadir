@@ -1,5 +1,5 @@
 /*
- * Zintra حاضر — base layer: modern reset, typography, focus, RTL/LTR.
+ * حاضر (Hadir) — base layer: modern reset, typography, focus, RTL/LTR.
  * Layout uses logical properties only (inline/block start/end) so the
  * `dir` attribute on <html> flips everything without extra rules.
  */

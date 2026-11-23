@@ -40,12 +40,21 @@ export function installButton({ variant = 'secondary', block = false, size = 'md
   return host;
 }
 
-/** Dismissible install card (shown once until dismissed). */
+// Dismissal is remembered per device under a namespaced key (never touches
+// the auth storage). It is read BEFORE the card is built, so a dismissed
+// card never flashes. If storage is blocked, the dismissal still holds for
+// this page session (in memory) and nothing throws.
+const DISMISS_KEY = 'hadir.pwa.installBannerDismissed';
+let dismissedThisSession = false;
+const isDismissed = () => dismissedThisSession || store.get(DISMISS_KEY) === '1' || store.get('zh.installDismissed') === '1';
+const dismiss = () => { dismissedThisSession = true; store.set(DISMISS_KEY, '1'); };
+
+/** Dismissible install card (shown until dismissed). */
 export function installBanner() {
   const host = h('div', { class: 'install-slot' });
   const render = (s) => {
     fill(host, );
-    if (s.installed || store.get('zh.installDismissed') === '1' || (!s.canPrompt && !s.iosManual)) return;
+    if (s.installed || isDismissed() || (!s.canPrompt && !s.iosManual)) return;
     add(host, h('section', { class: 'install-card', 'aria-labelledby': 'install-title' },
       h('img', { src: new URL('../../assets/icons/icon-192.png', import.meta.url).href, alt: '', width: '48', height: '48', class: 'install-card__icon' }),
       h('div', { class: 'install-card__text' },
@@ -53,7 +62,7 @@ export function installBanner() {
         h('p', { class: 'text-sm text-muted' }, t(s.canPrompt ? 'pwa.bannerText' : 'pwa.bannerTextIos'))),
       h('div', { class: 'install-card__actions' },
         installButton({ variant: 'primary', size: 'sm' }),
-        button({ label: t('pwa.notNow'), variant: 'ghost', size: 'sm', onClick: () => { store.set('zh.installDismissed', '1'); render(state()); } }))));
+        button({ label: t('pwa.notNow'), variant: 'ghost', size: 'sm', onClick: () => { dismiss(); render(state()); } }))));
   };
   render(state());
   onPwaChange(render);

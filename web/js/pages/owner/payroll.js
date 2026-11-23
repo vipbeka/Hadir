@@ -10,7 +10,7 @@ import { pdfBlob, xlsxBlob, csvBlob, summaryRows, rawRows, deliver, totals } fro
 import { pageHeader } from '../../shell/shell.js';
 import { card, badge, alert, emptyState, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
-import { input, select } from '../../ui/field.js';
+import { input, select, setFieldError } from '../../ui/field.js';
 import { toast } from '../../ui/toast.js';
 import { MARK_SRC } from '../../ui/brand.js';
 
@@ -38,37 +38,53 @@ export async function renderPayroll(main) {
     return { blob: csvBlob(rawRows(raw[which])), ext: 'csv', name: which };
   }) });
   const exportBtns = [pdf, xls, csv];
-  exportBtns.forEach((b) => { b.disabled = true; });
+  // Exports exist only for a report generated successfully for the month on
+  // screen: disabled (with a reason) until then, and again when the month
+  // changes or a generation fails. Handlers re-check (never trust the button).
+  const exportHint = h('p', { class: 'text-sm text-muted export-hint', id: 'export-hint' }, t('pr.exportNeedsReport'));
+  const setExports = (on) => exportBtns.forEach((b) => { b.disabled = !on; if (on) b.removeAttribute('aria-describedby'); else b.setAttribute('aria-describedby', 'export-hint'); });
+  const syncHint = () => { exportHint.hidden = !!rep; };
+  setExports(false);
   const status = h('p', { class: 'text-sm text-muted', role: 'status', 'aria-live': 'polite' });
   add(main, pageHeader({ iconName: 'fileText', title: t('pr.title'), subtitle: t('pr.subtitle') }),
     h('div', { class: 'toolbar no-print' }, fMonth, h('div', { class: 'cluster cluster--sm' }, gen, pdf, xls), h('div', { class: 'cluster cluster--sm' }, fCsv, csv)),
-    status);
+    exportHint, status);
   const body = h('div', { class: 'stack' }, emptyState({ iconName: 'fileText', title: t('pr.empty') }));
   add(main, body);
-  let rep; let busy = false;
+  let rep = null; let repMonth = null; let busy = false;
+  const monthVal = () => fMonth.querySelector('input').value;
+  // a different month (or filter) invalidates the report and its exports
+  const invalidate = () => { if (!rep && !repMonth) return; rep = null; repMonth = null; setExports(false); syncHint();
+    fill(body, emptyState({ iconName: 'fileText', title: t('pr.empty') })); status.textContent = ''; };
+  fMonth.querySelector('input').addEventListener('change', () => { if (monthVal() !== repMonth) invalidate(); });
 
   async function generate() {
     if (busy) return;
-    busy = true; setLoading(gen, true); exportBtns.forEach((b) => { b.disabled = true; });
+    if (!/^\d{4}-\d{2}$/.test(monthVal())) { setFieldError(fMonth, t('pr.pickMonth')); return; }
+    setFieldError(fMonth, null);
+    busy = true; setLoading(gen, true); rep = null; repMonth = null; setExports(false); syncHint();
     fill(body, skeletonCard(t('common.loading')));
+    const m = monthVal();
     try {
-      rep = await api('payroll', { month: `${fMonth.querySelector('input').value}-01` }, { timeoutMs: 30000 });
+      const r = await api('payroll', { month: `${m}-01` }, { timeoutMs: 30000 });
+      if (monthVal() !== m) { fill(body, emptyState({ iconName: 'fileText', title: t('pr.empty') })); return; } // month changed while loading: discard
+      rep = r; repMonth = m;
       render();
-      exportBtns.forEach((b) => { b.disabled = false; });
-    } catch (err) { fill(body, emptyState({ iconName: 'alertTriangle', title: t('error.title'), text: errorMessage(err), error: true, action: button({ label: t('common.retry'), onClick: () => generate() }) })); }
+      setExports(true); syncHint();
+    } catch (err) { rep = null; repMonth = null; setExports(false); syncHint(); fill(body, emptyState({ iconName: 'alertTriangle', title: t('error.title'), text: errorMessage(err), error: true, action: button({ label: t('common.retry'), onClick: () => generate() }) })); }
     finally { busy = false; setLoading(gen, false); }
   }
 
   /** One export at a time: immediate signal, progress, result or retry. */
   async function runExport(format, btn, build) {
-    if (busy || !rep) return;
+    if (busy || !rep || repMonth !== monthVal()) { if (!rep) status.textContent = t('pr.exportNeedsReport'); return; }
     busy = true; exportBtns.forEach((b) => { b.disabled = true; });
     setLoading(btn, true, t('pr.exporting', { format }));
     status.textContent = t('pr.exporting', { format });
     const t0 = performance.now();
     try {
       const out = await build((pct) => { status.textContent = `${t('pr.exporting', { format })} ${pct}%`; });
-      const file = `zintra-payroll-${rep.month.slice(0, 7)}${out.name ? `-${out.name}` : ''}.${out.ext}`;
+      const file = `hadir-payroll-${rep.month.slice(0, 7)}${out.name ? `-${out.name}` : ''}.${out.ext}`;
       const { file: f, canShare } = deliver(out.blob, file);
       const ms = Math.round(performance.now() - t0);
       main.dataset.lastExport = JSON.stringify({ format, ms, bytes: out.blob.size, file });
@@ -81,7 +97,7 @@ export async function renderPayroll(main) {
       status.textContent = t('pr.exportFailed', { format });
       toast({ title: t('pr.exportFailed', { format }), text: errorMessage(err), tone: 'danger' });
     } finally {
-      busy = false; setLoading(btn, false); exportBtns.forEach((b) => { b.disabled = !rep; });
+      busy = false; setLoading(btn, false); setExports(!!rep);
     }
   }
 

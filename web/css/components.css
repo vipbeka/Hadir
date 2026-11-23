@@ -1,5 +1,5 @@
 /*
- * Zintra حاضر — reusable components.
+ * حاضر (Hadir) — reusable components.
  * Each interactive component styles :hover, :focus-visible, :active,
  * :disabled and a loading state. The `.is-hover`, `.is-focus` and
  * `.is-active` classes mirror the pseudo-classes so the /design preview
@@ -194,29 +194,49 @@
 /* Switch (checkbox styled as toggle) */
 .switch { display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; }
 .switch__input { position: absolute; opacity: 0; inline-size: 1px; block-size: 1px; }
+/* Toggle: ON and OFF differ in colour, knob side, knob style AND a glyph
+   (✓ / ✕), so the state never depends on colour alone. The knob position
+   follows the reading direction (start = OFF, end = ON) in RTL and LTR. */
 .switch__track {
   position: relative; flex: none;
-  inline-size: 2.75rem; block-size: 1.5rem;
+  inline-size: 3rem; block-size: 1.625rem;
   background: var(--color-surface-sunken);
-  border: var(--border-width) solid var(--color-border-strong);
+  border: var(--border-width-strong) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
   transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
 }
+/* knob */
 .switch__track::after {
-  content: ""; position: absolute;
-  inset-block-start: 2px; inset-inline-start: 2px;
-  inline-size: 1.125rem; block-size: 1.125rem;
-  background: var(--color-text-muted);
+  content: ""; position: absolute; z-index: 1;
+  inset-block-start: 1px; inset-inline-start: 1px;
+  inline-size: 1.25rem; block-size: 1.25rem;
+  background: var(--color-surface);
+  border: var(--border-width-strong) solid var(--color-border-strong);
+  box-sizing: border-box;
   border-radius: var(--radius-pill);
-  transition: transform var(--duration-fast) var(--ease-emphasized), background-color var(--duration-fast) var(--ease-standard);
+  transition: transform var(--duration-fast) var(--ease-emphasized), background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+/* state glyph on the free side of the track */
+.switch__track::before {
+  content: "✕"; position: absolute;
+  inset-block-start: 50%; inset-inline-end: 0.4rem; transform: translateY(-50%);
+  font-size: var(--font-size-xs); font-weight: 700; line-height: 1;
+  color: var(--color-text-muted);
 }
 .switch:hover .switch__track { border-color: var(--color-text-muted); }
-.switch__input:checked + .switch__track { background: var(--color-primary); border-color: var(--color-primary); }
-.switch__input:checked + .switch__track::after { background: var(--color-text-on-primary); transform: translateX(1.25rem); }
-[dir="rtl"] .switch__input:checked + .switch__track::after { transform: translateX(-1.25rem); }
+.switch__input:checked + .switch__track { background: var(--color-success); border-color: var(--color-success); }
+.switch__input:checked + .switch__track::before { content: "✓"; inset-inline-end: auto; inset-inline-start: 0.45rem; color: var(--color-surface); }
+.switch__input:checked + .switch__track::after { border-color: var(--color-surface); transform: translateX(1.375rem); }
+[dir="rtl"] .switch__input:checked + .switch__track::after { transform: translateX(-1.375rem); }
 .switch__input:focus-visible + .switch__track { box-shadow: var(--focus-shadow); }
-.switch__input:disabled + .switch__track { opacity: 0.5; }
-.switch__input:disabled ~ * { cursor: not-allowed; }
+.switch__input:disabled + .switch__track { opacity: 0.45; border-style: dashed; }
+.switch__input:disabled ~ * { cursor: not-allowed; color: var(--color-text-muted); }
+@media (prefers-reduced-motion: reduce) { .switch__track, .switch__track::after { transition: none; } }
+
+/* inline save result under a settings card */
+.save-status { margin: 0; color: var(--color-text-muted); }
+.save-status--ok { color: var(--color-success); }
+.save-status--err { color: var(--color-danger); font-weight: 600; }
 
 /* Segmented control (language switcher, theme toggle, filters) */
 .segmented {

@@ -37,7 +37,7 @@ function harness() {
         case "svc_manual_check_in": return { employee: "أحمد علي", date: "2026-11-23", time: "9:30 ص", outcome: "green" };
         case "svc_bot_settings": return { geofence_lat: 29.98, geofence_lng: 31.32, radius_m: 100, reward_piastres: 10000, threshold: 30, work_days: [0, 1, 2, 3, 4],
           notify_events: ["check_in", "digest"], windows: [{ label_ar: "مبكر", start: "07:00", end: "08:00" }] };
-        case "svc_update_settings": case "svc_save_day": case "svc_set_job_title": return {};
+        case "svc_update_settings": case "svc_save_day": case "svc_save_days": case "svc_set_job_title": return {};
         case "svc_broadcast": return { people: 3, devices: 2 };
         case "svc_bot_today": return { date: "2026-11-23", is_work_day: true, closed: true, closes_at: "11:00 ص", people: [
           { name: "أحمد", in: "9:12 ص", outcome: "green" }, { name: "سارة", in: "10:40 ص", outcome: "red" }, { name: "محمد" }, { name: "منى", leave: true }] };
@@ -157,7 +157,9 @@ Deno.test("settings: radius validation, windows, location from a maps short link
   await h.msg("150"); await h.tap(`cf:${h.lastConfirmId()}`);
   assert(h.calls.some((c) => c.fn === "svc_update_settings" && c.args.p.geofence_radius_m === 150));
   await h.tap("s:win"); await h.msg("مبكر 07:00-08:00\nعادي 09:00-10:00\nمتأخر 10:00-11:00"); await h.tap(`cf:${h.lastConfirmId()}`);
-  assertEquals(h.calls.filter((c) => c.fn === "svc_save_day").length, 5);
+  const saves = h.calls.filter((c) => c.fn === "svc_save_days");
+  assertEquals(saves.length, 1);                    // one atomic call…
+  assertEquals(saves[0].args.p.days.length, 5);     // …covering all 5 work days
   await h.tap("s:loc"); await h.msg("https://maps.app.goo.gl/AbCdEf123"); await h.tap(`cf:${h.lastConfirmId()}`);
   const loc = h.calls.filter((c) => c.fn === "svc_update_settings").at(-1)!;
   assertEquals(loc.args.p, { geofence_lat: 29.9831944, geofence_lng: 31.3239444 });

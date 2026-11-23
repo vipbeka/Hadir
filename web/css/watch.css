@@ -1,0 +1,153 @@
+/*
+ * From Uiverse.io by chase2k25 - https://uiverse.io/chase2k25/warm-chicken-23
+ * MIT License, Copyright (c) chase2k25 (chandu.exe)
+ *
+ * Adapted for حاضر (Hadir): the case, crown, buttons, straps, bezel and
+ * glare are kept; the demo complications, radio-button pager and app grid
+ * are removed. One face shows EITHER the live Cairo time OR an
+ * announcement. All classes and keyframes are scoped with `hw-`; colours
+ * come from the --watch-* tokens (blue brand palette); sizes scale from
+ * --hw-w / --hw-h so the same watch fits the hero card and the page.
+ */
+.hw {
+  --hw-w: 9.75rem;
+  --hw-h: 11.75rem;
+  display: inline-flex; flex-direction: column; align-items: center; gap: var(--space-2);
+  flex: none;
+}
+.hw--large { --hw-w: 17.5rem; --hw-h: 21rem; }
+@media (min-width: 48rem) { .hw--compact { --hw-w: 11rem; --hw-h: 13.25rem; } }
+
+.hw__body { position: relative; inline-size: var(--hw-w); block-size: var(--hw-h); margin-block: calc(var(--hw-h) * 0.13); }
+
+/* straps */
+.hw__strap {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  inline-size: calc(var(--hw-w) * 0.48); block-size: calc(var(--hw-h) * 0.3); pointer-events: none;
+  border-radius: calc(var(--hw-w) * 0.06); z-index: 1;
+  box-shadow: inset 0 0 calc(var(--hw-w) * 0.12) var(--watch-ridge);
+}
+.hw__strap--top { inset-block-start: calc(var(--hw-h) * -0.13); background: linear-gradient(to top, var(--watch-strap), var(--watch-strap-2)); }
+.hw__strap--bottom { inset-block-end: calc(var(--hw-h) * -0.13); background: linear-gradient(to bottom, var(--watch-strap), var(--watch-strap-2)); }
+
+/* case */
+.hw__case {
+  position: relative; z-index: 2; inline-size: 100%; block-size: 100%; box-sizing: border-box;
+  padding: calc(var(--hw-w) * 0.032);
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(145deg, var(--watch-case-light), var(--watch-case), var(--watch-case-dark));
+  border: 1px solid var(--watch-case-border);
+  border-radius: calc(var(--hw-w) * 0.22);
+  box-shadow: 0 calc(var(--hw-h) * 0.1) calc(var(--hw-h) * 0.18) var(--watch-shadow), inset 0 1px 1px var(--watch-glare);
+  direction: ltr;   /* hardware sits on the physical right like a real watch */
+}
+.hw__crown-well, .hw__side-well, .hw__action-well { position: absolute; background: var(--watch-well); border-radius: var(--radius-pill); z-index: 1; }
+.hw__crown-well { right: -1px; top: 15%; inline-size: 4%; block-size: 24%; }
+.hw__crown {
+  position: absolute; right: -4%; top: 20%; inline-size: 6.5%; block-size: 13%; z-index: 3;
+  background: linear-gradient(to right, var(--watch-case), var(--watch-case-light), var(--watch-case-dark));
+  border-radius: calc(var(--hw-w) * 0.02);
+  box-shadow: 1px 1px 3px var(--watch-shadow);
+}
+.hw__crown::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: repeating-linear-gradient(0deg, var(--watch-ridge) 0, var(--watch-ridge) 1px, transparent 1px, transparent 3px);
+}
+.hw__side-well { right: -1px; top: 41%; inline-size: 2.6%; block-size: 17%; }
+.hw__side {
+  position: absolute; right: -2%; top: 43%; inline-size: 3%; block-size: 13%; z-index: 3;
+  background: linear-gradient(to right, var(--watch-case-dark), var(--watch-case)); border-radius: var(--radius-pill);
+}
+.hw__action-well { left: -1px; top: 33%; inline-size: 2.6%; block-size: 24%; }
+.hw__action {
+  position: absolute; left: -2%; top: 36%; inline-size: 3%; block-size: 18%; z-index: 3;
+  background: linear-gradient(to left, var(--watch-gold), var(--watch-gold-dark)); border-radius: var(--radius-pill);
+}
+
+/* screen */
+.hw__screen {
+  position: relative; inline-size: 100%; block-size: 100%; overflow: hidden; box-sizing: border-box;
+  border: calc(var(--hw-w) * 0.016) solid var(--watch-bezel);
+  border-radius: calc(var(--hw-w) * 0.19);
+  background: radial-gradient(circle at 30% 0%, var(--watch-screen-2), var(--watch-screen) 70%);
+  color: var(--watch-text);
+  direction: var(--hw-dir, rtl);
+}
+[dir="ltr"] .hw__screen { --hw-dir: ltr; }
+.hw__screen::after {
+  content: ""; position: absolute; inset-block-start: -40%; inset-inline-start: -40%; inline-size: 150%; block-size: 150%;
+  background: linear-gradient(135deg, var(--watch-glare) 0%, transparent 35%, transparent 65%, var(--watch-chip) 100%);
+  pointer-events: none; z-index: 5;
+  transition: transform 0.8s var(--watch-ease);
+}
+.hw:hover .hw__screen::after { transform: translate(4%, 4%); }
+
+.hw__status {
+  position: absolute; inset-block-start: 9%; inset-inline: 0; z-index: 4;
+  display: flex; justify-content: center; font-size: var(--font-size-xs); font-weight: var(--font-weight-bold);
+  color: var(--watch-text-dim); min-block-size: 1em;
+}
+
+/* the two exclusive faces */
+.hw__face {
+  position: absolute; inset: 0; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem;
+  padding: 22% 11% 14%;
+  text-align: center;
+  animation: hw-in 0.45s var(--watch-ease);
+}
+.hw__face[hidden] { display: none; }
+@keyframes hw-in { from { opacity: 0; transform: translateY(6%); } to { opacity: 1; transform: none; } }
+
+.hw__weekday { font-size: var(--font-size-xs); color: var(--watch-text-dim); font-weight: var(--font-weight-semibold); }
+.hw__time { display: flex; align-items: baseline; justify-content: center; gap: 0.2em; direction: ltr; line-height: 0.9; }
+.hw__hm { font-size: calc(var(--hw-w) * 0.24); font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; } /* lint-ignore: scales with the --hw-w size token */
+.hw__ampm { font-size: calc(var(--hw-w) * 0.085); font-weight: var(--font-weight-bold); color: var(--watch-accent); } /* lint-ignore: scales with --hw-w */
+.hw__date { font-size: var(--font-size-xs); color: var(--watch-text-dim); }
+
+.hw__label {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.1rem 0.5rem; border-radius: var(--radius-pill);
+  background: var(--watch-chip); border: 1px solid var(--watch-chip-border);
+  font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); color: var(--watch-accent);
+}
+.hw__title { font-weight: var(--font-weight-bold); font-size: var(--font-size-sm); line-height: 1.3;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.hw__text { font-size: var(--font-size-xs); line-height: 1.45; color: var(--watch-text);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; }
+.hw--large .hw__title { font-size: var(--font-size-md); }
+.hw--large .hw__text { font-size: var(--font-size-sm); -webkit-line-clamp: 5; }
+.hw--large .hw__face { gap: var(--space-2); }
+
+.hw__more, .hw__nav-btn {
+  font: inherit; cursor: pointer; color: var(--watch-text);
+  background: var(--watch-chip); border: 1px solid var(--watch-chip-border); border-radius: var(--radius-pill);
+}
+.hw__more { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); padding: 0.15rem 0.6rem; }
+.hw__more:hover, .hw__nav-btn:hover { background: var(--watch-chip-border); }
+.hw__more:focus-visible, .hw__nav-btn:focus-visible { outline: 2px solid var(--watch-accent); outline-offset: 2px; }
+
+/* previous / next + count, under the watch (never covers the text) */
+.hw__pager { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-xs); }
+.hw__pager[hidden] { display: none; }
+.hw__nav-btn {
+  display: grid; place-items: center; inline-size: 1.75rem; block-size: 1.75rem; padding: 0;
+  color: inherit; background: var(--color-hero-glass); border-color: var(--color-hero-glass-border);
+}
+.hw__nav-btn svg { inline-size: 1rem; block-size: 1rem; }
+/* next = towards the reading end, previous = back (mirrored per direction) */
+[dir="rtl"] .hw__next svg, [dir="ltr"] .hw__prev svg { transform: scaleX(-1); }
+.hw__count { font-variant-numeric: tabular-nums; min-inline-size: 3.5em; text-align: center; }
+.hw--on-surface .hw__nav-btn { background: var(--color-surface-sunken); border-color: var(--color-border); color: var(--color-text); }
+
+.hw__retry { font: inherit; font-size: var(--font-size-xs); color: inherit; background: none; border: 0; text-decoration: underline; cursor: pointer; padding: 0; }
+.hw__retry[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hw__face { animation: none; }
+  .hw__screen::after { transition: none; }
+  .hw:hover .hw__screen::after { transform: none; }
+}
+
+/* hero placement: the watch takes the old date-tile spot (inline-end) */
+@media (max-width: 22.5rem) { .hero-card .hw--compact { --hw-w: 8.75rem; --hw-h: 10.5rem; } }

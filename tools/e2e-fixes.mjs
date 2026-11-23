@@ -212,9 +212,9 @@ for (const g of [0, 1, 29, 30, 31]) {
 
 // ---------------------------------------------------------------- owner announcement on Home
 {
-  const { ctx, page } = await staffPage({ state: { announcements: [{ body: 'Meeting at 10 tomorrow', created_at: new Date().toISOString() }] } });
-  await page.waitForSelector('.announce');
-  check(/Announcement[\s\S]*Meeting at 10 tomorrow/.test(await page.textContent('.announce')), 'owner announcement (bot broadcast) shown on staff Home');
+  const { ctx, page } = await staffPage({ state: { announcements: [{ id: 'a1', title: null, body: 'Meeting at 10 tomorrow', created_at: new Date().toISOString() }] } });
+  await page.waitForSelector('.hero-card .hw[data-mode="ann"]');
+  check(/Announcement[\s\S]*Meeting at 10 tomorrow/.test(await page.textContent('.hero-card .hw')), 'owner announcement (bot broadcast) replaces the time in the home watch');
   await ctx.close();
 }
 

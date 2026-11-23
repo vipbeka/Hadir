@@ -1,10 +1,13 @@
-// Zintra حاضر — app entry.
+// حاضر (Hadir) — app entry.
 // Auth flow: persisted Supabase session → profile read through RLS →
 // role-based routing into ONE of two separate experiences:
 //   staff → /staff/* (staff shell),  owner → /owner/* (owner console).
 // There is no role switch anywhere. The route guard only keeps people
 // in their own tree; RLS and the Edge Functions are the real enforcers.
-import { initI18n, onLangChange, t } from './core/i18n.js';
+import { initI18n, onLangChange, t, setDocumentTitle } from './core/i18n.js';
+import { h } from './core/dom.js';
+import { button } from './ui/button.js';
+import { emptyState } from './ui/display.js';
 import { initTheme } from './core/theme.js';
 import { route, fallback, startRouter, resolve, navigate, currentPath } from './core/router.js';
 import { signInWithCode, currentPerson, signOut, onAuthChange } from './core/auth.js';
@@ -25,6 +28,7 @@ import { renderApprovals } from './pages/owner/approvals.js';
 import { renderPayroll } from './pages/owner/payroll.js';
 import { renderHolidays } from './pages/owner/holidays.js';
 import { renderSettings } from './pages/owner/settings.js';
+import { renderStaffAnnouncements, renderOwnerAnnouncements } from './pages/announcements.js';
 import { displayName } from './core/format.js';
 import { toast } from './ui/toast.js';
 import { closeAllModals } from './ui/modal.js';
@@ -41,11 +45,13 @@ const PAGES = {
   '/staff/points': renderStaffPoints,
   '/staff/leaderboard': renderLeaderboard,
   '/staff/requests': renderStaffRequests,
+  '/staff/announcements': renderStaffAnnouncements,
   '/staff/account': renderAccount,
   '/owner/dashboard': renderOwnerDashboard,
   '/owner/approvals': renderApprovals,
   '/owner/employees': renderEmployees,
   '/owner/leaderboard': renderLeaderboard,
+  '/owner/announcements': renderOwnerAnnouncements,
   '/owner/payroll': renderPayroll,
   '/owner/holidays': renderHolidays,
   '/owner/settings': renderSettings,
@@ -90,6 +96,40 @@ function mountTree(nav) {
   });
 }
 
+/** Arabic not-found state. Signed in: inside the shell (nav still works). */
+function renderNotFound(path) {
+  setDocumentTitle(t('nf.title'));
+  const home = me ? HOME[me.role] : '/login';
+  const action = h('div', { class: 'cluster' },
+    button({ label: t(me ? 'nf.goHome' : 'nf.goLogin'), variant: 'primary', icon: me ? 'home' : 'logIn', onClick: () => navigate(home) }),
+    history.length > 1 ? button({ label: t('nf.back'), variant: 'ghost', onClick: () => history.back() }) : null);
+  const box = h('section', { class: 'card not-found', 'data-page': 'not-found' },
+    emptyState({ iconName: 'compass', title: t('nf.title'),
+      text: h('span', {}, t('nf.text'), ' ', h('bdi', { class: 'num', dir: 'ltr' }, `#${path}`.slice(0, 80))), action }));
+  if (me) {
+    const nav = me.role === 'owner' ? OWNER_NAV : STAFF_NAV;
+    const { main } = renderShell(root, { nav, currentPath: path, user: { name: displayName(me), roleKey: `role.${me.role}` }, onSignOut: () => doSignOut() });
+    main.append(box);
+  } else {
+    document.body.classList.remove('has-bottombar');
+    root.replaceChildren(h('main', { id: 'main', class: 'standalone' }, box));
+  }
+  box.querySelector('.empty__title')?.setAttribute('tabindex', '-1');
+  box.querySelector('.empty__title')?.focus({ preventScroll: true });
+}
+
+/** #/login while already signed in: say so, offer the dashboard (no silent redirect). */
+function renderAlreadySignedIn() {
+  setDocumentTitle(t('nf.signedInTitle'));
+  const nav = me.role === 'owner' ? OWNER_NAV : STAFF_NAV;
+  const { main } = renderShell(root, { nav, currentPath: '/login', user: { name: displayName(me), roleKey: `role.${me.role}` }, onSignOut: () => doSignOut() });
+  main.append(h('section', { class: 'card not-found', 'data-page': 'already-signed-in' },
+    emptyState({ iconName: 'checkCircle', title: t('nf.signedInTitle'), text: t('nf.signedInText', { name: displayName(me) }),
+      action: h('div', { class: 'cluster' },
+        button({ label: t(me.role === 'owner' ? 'nf.toDashboard' : 'nf.goHome'), variant: 'primary', icon: 'home', onClick: () => navigate(HOME[me.role]) }),
+        button({ label: t('nf.signOut'), variant: 'ghost', onClick: () => doSignOut() })) })));
+}
+
 function loginErrorKey(err) {
   if (err instanceof ApiError) {
     if (err.code === 'locked_out') return ['login.errorLocked', { min: Math.max(1, Math.ceil((err.retry_after_s || 900) / 60)) }];
@@ -104,7 +144,8 @@ async function boot() {
   await initI18n();
 
   route('/login', () => {
-    if (me) { navigate(HOME[me.role], { replace: true }); return; }
+    runCleanups();
+    if (me) { renderAlreadySignedIn(); return; }
     renderLogin(root, {
       notice: loginNotice ? t(loginNotice) : null,
       onSubmit: async (code) => {
@@ -124,7 +165,13 @@ async function boot() {
   });
   mountTree(STAFF_NAV);
   mountTree(OWNER_NAV);
-  fallback(() => navigate(me ? HOME[me.role] : '/login', { replace: true }));
+  // Unknown hash routes show a real not-found state (with a way back),
+  // never a silent redirect. "/" alone still opens the right home.
+  fallback((path) => {
+    runCleanups();
+    if (path === '/' || path === '') { navigate(me ? HOME[me.role] : '/login', { replace: true }); return; }
+    renderNotFound(path);
+  });
 
   // Restore a persisted session (no code prompt on reopen).
   try { me = await currentPerson(); } catch { me = null; }

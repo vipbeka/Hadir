@@ -1,6 +1,6 @@
 // Internationalisation: one messages file per language (web/i18n/*.json).
 // Arabic (RTL) is the default; English (LTR) is the alternative.
-// The product name "Zintra حاضر" is the single key `app.name` in each file.
+// The product name «حاضر» is the single key `app.name` in each file.
 import { store } from './storage.js';
 
 const SUPPORTED = ['ar', 'en'];
@@ -51,7 +51,7 @@ export function formatNumber(n, opts = {}) {
 }
 
 /**
- * Set document.title as "<page> · Zintra حاضر".
+ * Set document.title as "<page> · حاضر".
  * The product name is wrapped in Unicode isolates (LRI … PDI) so the
  * mixed Latin/Arabic name keeps its visual order inside RTL titles.
  */

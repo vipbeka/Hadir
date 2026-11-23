@@ -1,5 +1,5 @@
 /*
- * Zintra حاضر — boot (classic script, loaded synchronously in <head>).
+ * حاضر (Hadir) — boot (classic script, loaded synchronously in <head>).
  * Applies the stored language/direction and the resolved theme before
  * first paint so there is no flash of the wrong theme or direction.
  * Storage access is wrapped: private mode or blocked storage falls

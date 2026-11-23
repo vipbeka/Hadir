@@ -1,8 +1,7 @@
-// Brand wordmark: logo mark + "Zintra حاضر".
-// The name comes from the single `app.name` message. It is wrapped in
-// <bdi dir="ltr"> so the mixed Latin/Arabic name always renders in the
-// same visual order ("Zintra" then "حاضر") in both RTL and LTR layouts
-// and never reorders surrounding text.
+// Brand wordmark: logo mark + the product name «حاضر».
+// The name comes from the single `app.name` message (never hard-coded),
+// so it renders the same in RTL and LTR layouts and never reorders the
+// surrounding text.
 import { h } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 

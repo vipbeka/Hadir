@@ -1,18 +1,18 @@
 // Staff Home (reference design): greeting + avatar, gradient hero with the
-// date tile, today's attendance status (real window / closing times),
+// shared watch (live Cairo time, or the current announcement), today's attendance status (real window / closing times),
 // month stats and this month's points with the reward progress.
 import { h, add, fill } from '../../core/dom.js';
 import { t, setDocumentTitle, getLang } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
-import { sb } from '../../core/supabase.js';
 import { errorMessage } from '../../core/errors.js';
-import { displayName, formatTime, formatClock, formatMinutes, formatDateTime, jobTitle } from '../../core/format.js';
+import { displayName, formatTime, formatClock, formatMinutes, jobTitle } from '../../core/format.js';
 import { chip, progress, alert, emptyState, skeletonCard } from '../../ui/display.js';
 import { button } from '../../ui/button.js';
 import { icon } from '../../ui/icons.js';
 import { installBanner } from '../../ui/install.js';
 import { pushCard } from '../../ui/push-card.js';
 import { navigate } from '../../core/router.js';
+import { announcementWatch } from '../../ui/watch.js';
 
 /** Three counters (green / red / black) — kept for other pages. */
 export function pointCounters(tot) {
@@ -46,7 +46,7 @@ function windowLine(day) {
   return day.check_in_closes_at ? t('home.availableUntil', { time: formatClock(day.check_in_closes_at) }) : null;
 }
 
-export async function renderStaffHome(main, { me }) {
+export async function renderStaffHome(main, { me, registerCleanup }) {
   setDocumentTitle(t('nav.home'));
   const now = new Date();
   const greet = t(cairoHour(now) < 12 ? 'home.greetMorning' : 'home.greetEvening');
@@ -59,25 +59,20 @@ export async function renderStaffHome(main, { me }) {
       h('p', { class: 'greet__sub' }, t('home.welcomeSub'))),
     h('span', { class: 'greet__avatar', 'aria-hidden': 'true' }, initial(me))));
 
-  // ---- gradient hero with the date tile
+  // ---- gradient hero; the watch replaces the old calendar/date tile
   add(main, h('section', { class: 'hero-card' },
     h('span', { class: 'hero-card__mark', 'aria-hidden': 'true' }, 'ح'),
     h('div', { class: 'hero-card__text' },
       chip(t('home.heroChip'), { iconName: 'sparkle' }),
       h('p', { class: 'hero-card__title' }, t('home.heroTitle1'), h('br'), h('span', { class: 'hero-card__accent' }, t('home.heroTitle2'))),
       h('p', { class: 'hero-card__sub' }, t('home.heroText'))),
-    h('div', { class: 'date-tile' }, icon('calendar'),
-      h('span', { class: 'date-tile__day num' }, cairo({ day: 'numeric' }, now)),
-      h('span', { class: 'date-tile__month' }, cairo({ month: 'long' }, now)))));
+    announcementWatch({ size: 'compact', registerCleanup })));
 
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, body);
   try {
-    const since = new Date(Date.now() - 7 * 864e5).toISOString();
-    const [day, sum, ann] = await Promise.all([api('my_day'), api('my_summary'),
-      // latest owner announcement (last 7 days); a failure here never blocks Home
-      sb.from('announcements').select('body,created_at').gte('created_at', since).order('created_at', { ascending: false }).limit(1)
-        .then((r) => (r.error ? null : r.data?.[0] || null), () => null)]);
+    // announcements are shown by the watch in the hero (shared state)
+    const [day, sum] = await Promise.all([api('my_day'), api('my_summary')]);
     const a = day.attendance;
     const go = (label) => button({ label, variant: 'primary', size: 'lg', block: true, icon: 'mapPin', iconEnd: 'arrowRight', onClick: () => navigate('/staff/attendance') });
 
@@ -102,10 +97,6 @@ export async function renderStaffHome(main, { me }) {
     const chipCount = (cls, n, label) => h('span', { class: `pt-chip pt-chip--${cls}` }, h('span', { class: 'chip__dot', 'aria-hidden': 'true' }), h('b', { class: 'num' }, String(n ?? 0)), label);
 
     fill(body,
-      ann ? h('section', { class: 'card announce', role: 'status' },
-        h('span', { class: 'card__icon', 'aria-hidden': 'true' }, icon('bell')),
-        h('div', { class: 'announce__text' }, h('p', { class: 'announce__title' }, t('home.announcement')),
-          h('p', { class: 'announce__body' }, ann.body), h('p', { class: 'text-xs text-muted' }, formatDateTime(ann.created_at)))) : null,
       // section header: «اليوم / حالة الحضور» + date chip
       h('div', { class: 'sec-head' },
         h('div', {}, h('p', { class: 'sec-head__eyebrow' }, t('home.todayLabel')), h('h2', { class: 'sec-head__title' }, t('home.statusTitle'))),

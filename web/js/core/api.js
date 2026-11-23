@@ -1,4 +1,4 @@
-// Calls to Zintra حاضر Edge Functions. Errors come back as stable codes
+// Calls to the حاضر (Hadir) Edge Functions. Errors come back as stable codes
 // that the UI maps to localized messages (never raw server text).
 import { FUNCTIONS_URL, SUPABASE_PUBLISHABLE_KEY } from '../config.js';
 import { sb } from './supabase.js';

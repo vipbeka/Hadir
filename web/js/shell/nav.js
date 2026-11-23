@@ -9,6 +9,7 @@ export const STAFF_NAV = [
   // the 4th tab «المزيد» opens the leaderboard (as in the reference design)
   { path: '/staff/leaderboard', labelKey: 'nav.leaderboard', icon: 'trophy', bottom: true, bottomLabelKey: 'common.more', bottomIcon: 'moreHorizontal' },
   { path: '/staff/requests', labelKey: 'nav.requests', icon: 'inbox' },
+  { path: '/staff/announcements', labelKey: 'nav.announcements', icon: 'bell' },
   { path: '/staff/account', labelKey: 'nav.account', icon: 'user' },
 ];
 
@@ -17,6 +18,7 @@ export const OWNER_NAV = [
   { path: '/owner/approvals', labelKey: 'nav.approvals', icon: 'checkCircle', bottom: true },
   { path: '/owner/employees', labelKey: 'nav.employees', icon: 'users', bottom: true },
   { path: '/owner/leaderboard', labelKey: 'nav.leaderboard', icon: 'trophy' },
+  { path: '/owner/announcements', labelKey: 'nav.announcements', icon: 'bell' },
   { path: '/owner/payroll', labelKey: 'nav.payroll', icon: 'fileText' },
   { path: '/owner/holidays', labelKey: 'nav.holidays', icon: 'calendar' },
   { path: '/owner/settings', labelKey: 'nav.settings', icon: 'settings' },

@@ -1,5 +1,5 @@
 // =====================================================================
-// Zintra حاضر — Telegram admin bot (owner only).
+// حاضر (Hadir) — Telegram admin bot (owner only).
 // Pure logic with injected dependencies (Telegram API, database RPCs,
 // employee operations) so every flow can be tested with simulated
 // updates. Security rules:
@@ -130,6 +130,7 @@ const ERR: Record<string, string> = {
   invalid_time: "الوقت أو التاريخ مش صحيح (ومينفعش يكون في المستقبل).", invalid_settings: "القيمة دي مش مقبولة.", windows_overlap: "النوافذ متداخلة.",
   invalid_window: "صيغة النوافذ مش صحيحة.", not_found: "مش لاقي الطلب ده.", invalid_transition: "مينفعش تغيّر الطلب ده.",
   invalid_text: "النص فاضي أو طويل جدًا.", cannot_deactivate_self: "مينفعش توقف حسابك.", last_owner: "لازم يفضل مالك واحد على الأقل.",
+  forbidden: "مش مسموح لك بالعملية دي.",
   create_failed: "حصلت مشكلة وإحنا بنضيف الموظف — مفيش حاجة اتعملت، جرّب تاني.", invalid_amount: "المبلغ لازم يكون جنيهات صحيحة.",
 };
 export function errText(e: unknown): string {
@@ -148,8 +149,16 @@ export const MAIN_MENU: Kb = [
   [{ text: "✅ الموافقات", callback_data: "m:appr" }, { text: "👥 الموظفين", callback_data: "m:emp" }],
   [{ text: "⭐ النقاط", callback_data: "m:pts" }, { text: "🕘 حضور استثنائي", callback_data: "m:att" }],
   [{ text: "📊 التقارير", callback_data: "m:rep" }, { text: "⚙️ الإعدادات", callback_data: "m:set" }],
-  [{ text: "📢 إعلان للموظفين", callback_data: "m:bc" }],
+  [{ text: "📢 إعلان للموظفين", callback_data: "m:bc" }, { text: "🗑️ حذف إعلان", callback_data: "m:ad" }],
 ];
+const AD_PAGE = 5;
+type Ann = { id: string; title: string | null; body: string; created_at: string };
+const annPreview = (a: Ann, n = 60) => {
+  const t = (a.title ? `${a.title} — ` : "") + a.body.replace(/\s+/g, " ");
+  return t.length > n ? t.slice(0, n - 1) + "…" : t;
+};
+const annDate = (iso: string) => new Intl.DateTimeFormat("ar-EG-u-nu-latn", { timeZone: "Africa/Cairo", day: "2-digit", month: "2-digit", year: "numeric",
+  hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(iso));
 
 // ------------------------------------------------------------ the bot
 export class Bot {
@@ -285,11 +294,15 @@ export class Bot {
         case "repemp": return this.pickEmployee("📊 تقرير الشهر لمين؟", "r");
         case "set": return this.settingsMenu();
         case "bc": return this.startBroadcast();
+        case "ad": return this.announcementsPage(0);
         case "newemp":
           await this.setState({ flow: "emp_new", step: "name_ar", data: {} });
           return this.send("➕ موظف جديد — ابعت الاسم بالعربي:\n(ابعت /cancel للإلغاء)");
       }
     }
+    if ((m = /^ad:p:(\d{1,3})$/.exec(data))) return this.announcementsPage(Number(m[1]), messageId);
+    if ((m = new RegExp(`^ad:v:(\\d{1,3}):(${UUID})$`).exec(data))) return this.announcementPreview(Number(m[1]), m[2]);
+    if (data.startsWith("ad:")) return this.send("ℹ️ الزرار ده قديم. افتح القائمة تاني:", kb([[{ text: "🗑️ حذف إعلان", callback_data: "m:ad" }], back()]));
     if (data === "r:today") return this.today();
     if (data === "r:points") return this.points();
     if ((m = /^el:(a|r):(\d{1,12})$/.exec(data))) return this.decideEarly(Number(m[2]), m[1] === "a", message, null);
@@ -488,6 +501,35 @@ export class Bot {
     return this.send(`${prompts[k]}\n(ابعت /cancel للإلغاء)`);
   }
 
+  /** «🗑️ حذف إعلان»: paginated list, newest first (same records as the web panel). */
+  async announcementsPage(page: number, editId?: number): Promise<unknown> {
+    const r = await this.d.rpc<{ total: number; rows: Ann[] }>("svc_list_announcements", { p_actor: this.c.ownerId, p: { limit: AD_PAGE, offset: page * AD_PAGE } });
+    const total = Number(r?.total ?? 0); const rows = r?.rows ?? [];
+    if (!total) return this.send("📭 مفيش إعلانات دلوقتي.", kb([back()]));
+    if (!rows.length && page > 0) return this.announcementsPage(0, editId);
+    const pages = Math.ceil(total / AD_PAGE);
+    const list: Kb = rows.map((a) => [{ text: `🗑️ ${annPreview(a, 40)}`, callback_data: `ad:v:${page}:${a.id}` }]);
+    const nav: Btn[] = [];
+    if (page > 0) nav.push({ text: "◀️ الأحدث", callback_data: `ad:p:${page - 1}` });
+    if (page < pages - 1) nav.push({ text: "الأقدم ▶️", callback_data: `ad:p:${page + 1}` });
+    const text = `🗑️ اختار الإعلان اللي عايز تحذفه (${total} إعلان — صفحة ${page + 1} من ${pages}):`;
+    const markup = kb([...list, ...(nav.length ? [nav] : []), back()]);
+    return editId ? this.edit(editId, text, markup) : this.send(text, markup);
+  }
+
+  async announcementPreview(page: number, id: string) {
+    const r = await this.d.rpc<{ total: number; rows: Ann[] }>("svc_list_announcements", { p_actor: this.c.ownerId, p: { limit: AD_PAGE, offset: page * AD_PAGE } });
+    let a = (r?.rows ?? []).find((x) => x.id === id);
+    if (!a) {   // it may have moved to another page — look a bit wider
+      const all = await this.d.rpc<{ rows: Ann[] }>("svc_list_announcements", { p_actor: this.c.ownerId, p: { limit: 100 } });
+      a = (all?.rows ?? []).find((x) => x.id === id);
+    }
+    if (!a) return this.send("ℹ️ الإعلان ده مش موجود (اتحذف قبل كده).", kb([[{ text: "🗑️ حذف إعلان", callback_data: "m:ad" }], back()]));
+    const body = a.body.length > 700 ? a.body.slice(0, 699) + "…" : a.body;
+    return this.confirm(`🗑️ حذف الإعلان ده؟\n• ${esc(annDate(a.created_at))}${a.title ? `\n• العنوان: <b>${esc(a.title)}</b>` : ""}\n\n«${esc(body)}»\n\nهيختفي من التطبيق عند كل الموظفين. رسايل تيليجرام القديمة مش هتتمسح.`,
+      { t: "ad_del", id: a.id, preview: annPreview(a, 80) });
+  }
+
   async startBroadcast() {
     await this.setState({ flow: "bc" });
     return this.send("📢 اكتب الإعلان اللي عايز توصّله لكل الموظفين:\n(ابعت /cancel للإلغاء)");
@@ -529,14 +571,21 @@ export class Bot {
         case "set_win": {
           const s = await this.d.rpc<Record<string, unknown>>("svc_bot_settings");
           const days = (s.work_days as number[]) || [];
-          for (const dow of days) {
-            await this.d.rpc("svc_save_day", { p_actor: this.c.ownerId, p: { day_of_week: dow, windows: (a.windows as Array<Record<string, string>>).map((w) => ({ ...w, enabled: true, awards_green_point: true })) } });
-          }
+          if (!days.length) return this.edit(messageId, "⚠️ مفيش أيام عمل متحددة.");
+          // one atomic save for all work days; point flags are NOT sent, so
+          // each window keeps its current green/red setting (matched by name)
+          await this.d.rpc("svc_save_days", { p_actor: this.c.ownerId, p: { days: days.map((dow) => ({ day_of_week: dow,
+            windows: (a.windows as Array<Record<string, string>>).map((w) => ({ label_ar: w.label_ar, label_en: w.label_en, start: w.start, end: w.end, enabled: true })) })) } });
           return this.edit(messageId, `✅ اتغيّرت مواعيد النوافذ لـ ${days.length} أيام عمل.`);
         }
         case "set": {
           await this.d.rpc("svc_update_settings", { p_actor: this.c.ownerId, p: a.patch });
           return this.edit(messageId, `✅ اتحفظ: ${esc(a.what)}.`);
+        }
+        case "ad_del": {
+          const r = await this.d.rpc<Record<string, unknown>>("svc_delete_announcement", { p_actor: this.c.ownerId, p: { id: a.id, via: "telegram" } });
+          return this.edit(messageId, r?.deleted ? `✅ اتحذف الإعلان: «${esc(a.preview)}»\nاختفى من التطبيق عند كل الموظفين.`
+            : "ℹ️ الإعلان ده كان اتحذف قبل كده.", kb([[{ text: "🗑️ حذف إعلان تاني", callback_data: "m:ad" }], back()]));
         }
         case "bc": {
           const r = await this.d.rpc<Record<string, unknown>>("svc_broadcast", { p_actor: this.c.ownerId, p: { text: a.text } });

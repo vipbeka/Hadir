@@ -1,5 +1,5 @@
 /*
- * Zintra حاضر — service worker
+ * حاضر (Hadir) — service worker
  * - Precaches the app shell so the installed app opens instantly.
  * - Static assets: stale-while-revalidate (fast, refreshed in background).
  * - Navigations: network-first, falling back to the cached shell, then
@@ -9,22 +9,22 @@
  * - Web Push handlers are added in Step 5 (shift reminders).
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'zh-v6';
+const VERSION = 'zh-v7';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const PRECACHE = [
   './', './index.html', './offline.html', './manifest.webmanifest', './favicon.ico',
-  './css/tokens.css', './css/base.css', './css/components.css', './css/shell.css', './css/pages.css',
+  './css/tokens.css', './css/base.css', './css/components.css', './css/shell.css', './css/pages.css', './css/watch.css',
   './js/boot.js', './js/app.js', './js/config.js',
   './js/core/api.js', './js/core/auth.js', './js/core/dom.js', './js/core/errors.js', './js/core/format.js',
   './js/core/i18n.js', './js/core/pwa.js', './js/core/push.js', './js/core/router.js', './js/core/storage.js', './js/core/supabase.js', './js/core/theme.js',
   './js/ui/brand.js', './js/ui/button.js', './js/ui/code-dialog.js', './js/ui/display.js', './js/ui/field.js',
-  './js/ui/icons.js', './js/ui/install.js', './js/ui/modal.js', './js/ui/prefs.js', './js/ui/push-card.js', './js/ui/toast.js',
+  './js/ui/icons.js', './js/ui/install.js', './js/ui/modal.js', './js/ui/prefs.js', './js/ui/push-card.js', './js/ui/toast.js', './js/ui/watch.js',
   './js/shell/nav.js', './js/shell/shell.js',
   './js/pages/account.js', './js/pages/login.js', './js/pages/placeholder.js', './js/pages/leaderboard.js',
   './js/pages/staff/home.js', './js/pages/staff/attendance.js', './js/pages/staff/points.js', './js/pages/staff/requests.js',
   './js/pages/owner/employees.js', './js/pages/owner/dashboard.js', './js/pages/owner/approvals.js', './js/pages/owner/payroll.js', './js/pages/owner/payroll-export.js',
-  './js/pages/owner/holidays.js', './js/pages/owner/settings.js',
+  './js/pages/owner/holidays.js', './js/pages/owner/settings.js', './js/pages/announcements.js',
   './vendor/leaflet-1.9.4/leaflet.js', './vendor/leaflet-1.9.4/leaflet.css',
   './i18n/ar.json', './i18n/en.json',
   './vendor/supabase-js-2.119.2/supabase.js',
@@ -89,8 +89,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(req);
-        const cache = await caches.open(SHELL);
-        cache.put('./index.html', fresh.clone());
+        // only a real app-shell page refreshes the cached shell (never a 404 page)
+        const p = url.pathname.replace(/\/+$/, '/');
+        if (fresh.ok && (p.endsWith('/') || p.endsWith('/index.html'))) {
+          (await caches.open(SHELL)).put('./index.html', fresh.clone());
+        }
         return fresh;
       } catch {
         return (await caches.match('./index.html')) || (await caches.match('./offline.html'));

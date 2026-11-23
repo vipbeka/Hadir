@@ -1,5 +1,5 @@
 /*
- * Zintra حاضر — design tokens
+ * حاضر (Hadir) — design tokens
  * ---------------------------------------------------------------
  * The ONLY place colors, spacing, type, radii, shadows, z-index and
  * motion values are defined. Every other stylesheet references these
@@ -139,6 +139,28 @@
   --gradient-cta: linear-gradient(to left, #1B4A9B 0%, #1F6AA9 55%, #1B7489 100%);
   /* Hero / header cards: deep blue (top inline-start) → teal (bottom inline-end).
      The teal end stays dark enough for white text (≥4.5:1). */
+  /* ---------- Watch (staff home hero + «الإعلانات») — same in both themes ---------- */
+  --watch-case-light: #F4F8FE;
+  --watch-case: #C4D4EB;
+  --watch-case-dark: #869FC4;
+  --watch-case-border: #8DA5C8;
+  --watch-strap: #16408A;
+  --watch-strap-2: #2565B3;
+  --watch-bezel: #000204;
+  --watch-screen: #04173F;
+  --watch-screen-2: #0A2A66;
+  --watch-text: #FFFFFF;
+  --watch-text-dim: #B9D0F0;
+  --watch-accent: #8FF0E6;
+  --watch-gold: #E4AF48;
+  --watch-gold-dark: #B97D25;
+  --watch-chip: rgb(255 255 255 / 0.10);
+  --watch-chip-border: rgb(255 255 255 / 0.16);
+  --watch-well: rgb(0 0 0 / 0.18);
+  --watch-glare: rgb(255 255 255 / 0.22);
+  --watch-shadow: rgb(1 20 60 / 0.38);
+  --watch-ridge: rgb(0 0 0 / 0.10);
+  --watch-ease: cubic-bezier(0.2, 1, 0.2, 1);
   --gradient-hero: linear-gradient(to bottom left, #1B4A9B 0%, #2160AC 45%, #1B7489 100%);
   --color-hero-end: #1B7489;
   --color-on-hero: #FFFFFF;
