@@ -630,5 +630,6 @@
   "lb.zeroPeriod": "No points were recorded in this period",
   "lb.monthly": "Monthly progress",
   "lb.totalLabel": "Total green points",
-  "lb.footer": "Green points come from checking in during windows and from approved achievements. Deductions are never shown here."
+  "lb.footer": "Green points come from checking in during windows and from approved achievements. Deductions are never shown here.",
+  "home.announcement": "📢 Announcement"
 }

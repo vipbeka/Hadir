@@ -9,9 +9,7 @@
 import { serve, json, str, fail, UUID_RE, PHONE_RE } from "../_shared/http.ts";
 import { admin, rpc } from "../_shared/clients.ts";
 import { requireCaller } from "../_shared/auth.ts";
-import { newUniqueCode, codeLength } from "../_shared/codes.ts";
-
-const syntheticEmail = (id: string) => `${id}@staff.invalid`;
+import { createEmployee, setActive, regenerateCode, EmployeeError } from "../_shared/employees.ts";
 
 function names(body: Record<string, unknown>) {
   const nameAr = str(body.full_name_ar, { min: 2, max: 80 });
@@ -29,7 +27,9 @@ function target(body: Record<string, unknown>): string {
   return id!;
 }
 
+const STATUS: Record<string, number> = { not_found: 404, cannot_deactivate_self: 409, last_owner: 409, invalid_salary: 400, create_failed: 500 };
 function mapPg(e: unknown): never {
+  if (e instanceof EmployeeError) fail(STATUS[e.code] ?? 500, e.code);
   const msg = e instanceof Error ? e.message : "";
   if (/profile not found/.test(msg)) fail(404, "not_found");
   if (/cannot deactivate yourself/.test(msg)) fail(409, "cannot_deactivate_self");
@@ -49,28 +49,10 @@ serve(async (req, body) => {
 
     case "create": {
       const { nameAr, nameEn, phone } = names(body);
-      const role = body.role === "owner" ? "owner" : "staff";
-      const id = crypto.randomUUID();
-      const { code, hash } = await newUniqueCode(await codeLength());
-      // 1) auth user (synthetic internal email, no password, never emailed)
-      const { error: cErr } = await admin.auth.admin.createUser({
-        id, email: syntheticEmail(id), email_confirm: true, app_metadata: { role },
-      });
-      if (cErr) { console.error("createUser failed", cErr.status); fail(500, "create_failed"); }
-      // 2) profile + salary placeholder + code hash in ONE transaction;
-      //    on failure roll back the auth user — never a half-created account.
       try {
-        const employee = await rpc("svc_create_employee", {
-          p_actor: owner.id, p_user_id: id, p_name_ar: nameAr, p_name_en: nameEn, p_phone: phone, p_role: role, p_code_hash: hash,
-        });
         // The plaintext code appears in this single response only.
-        return json(req, { employee, code });
-      } catch (e) {
-        const { error: dErr } = await admin.auth.admin.deleteUser(id);
-        if (dErr) console.error("rollback deleteUser failed — orphan auth user", id);
-        console.error("create employee failed", e instanceof Error ? e.message : "");
-        fail(500, "create_failed");
-      }
+        return json(req, await createEmployee(owner.id, { nameAr, nameEn, phone, role: body.role === "owner" ? "owner" : "staff" }));
+      } catch (e) { mapPg(e); }
       break;
     }
 
@@ -85,25 +67,14 @@ serve(async (req, body) => {
 
     case "regenerate_code": {
       const id = target(body);
-      const { code, hash } = await newUniqueCode(await codeLength());
       // Regenerating your own code keeps your current session alive.
-      const keep = id === owner.id ? owner.sessionId : null;
-      try {
-        const revoked = await rpc<number>("svc_set_code", { p_actor: owner.id, p_profile: id, p_code_hash: hash, p_keep_session: keep });
-        return json(req, { code, sessions_revoked: revoked });
-      } catch (e) { mapPg(e); }
+      try { return json(req, await regenerateCode(owner.id, id, id === owner.id ? owner.sessionId : null)); } catch (e) { mapPg(e); }
       break;
     }
 
     case "set_active": {
       const id = target(body);
-      const active = body.active === true;
-      try {
-        const employee = await rpc("svc_set_active", { p_actor: owner.id, p_profile: id, p_active: active, p_reason: str(body.reason, { max: 300 }) });
-        // Belt and braces: ban the Auth user too, so no new session can be minted.
-        await admin.auth.admin.updateUserById(id, { ban_duration: active ? "none" : "876000h" });
-        return json(req, { employee });
-      } catch (e) { mapPg(e); }
+      try { return json(req, { employee: await setActive(owner.id, id, body.active === true, str(body.reason, { max: 300 })) }); } catch (e) { mapPg(e); }
       break;
     }
 

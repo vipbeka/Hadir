@@ -252,4 +252,58 @@ set local role authenticated;
 select pg_temp.ok((select count(*) from public.get_leaderboard()) = 0, 'leaderboard toggle off → staff data path returns nothing');
 reset role;
 
+-- 13) audit fixes + admin-bot backend ------------------------------------
+-- login: parallel attempts can no longer exceed the failure allowance
+select pg_temp.ok((select bool_and((public.svc_login_precheck('iphash-par', 'devhash-par') ->> 'allowed')::boolean) from generate_series(1, 5)), 'five in-flight login attempts allowed');
+select pg_temp.ok(not (public.svc_login_precheck('iphash-par', 'devhash-par') ->> 'allowed')::boolean, '6th parallel attempt refused before any code is checked');
+select pg_temp.ok((public.svc_login_precheck('iphash-ok', 'devhash-ok') ->> 'attempt_id') is not null, 'pre-check reserves an attempt row');
+select public.svc_login_record('iphash-ok', 'devhash-ok', true, '00000000-0000-4000-b000-00000000000a', false,
+  (select max(id) from public.login_attempts where client_ip_hash = 'iphash-ok'));
+select pg_temp.ok((select count(*) from public.login_attempts where client_ip_hash = 'iphash-ok') = 1
+  and (select bool_and(success) from public.login_attempts where client_ip_hash = 'iphash-ok'), 'successful login completes the reserved row (no double count)');
+-- check-out just after midnight closes yesterday's open record
+insert into public.attendance_days (employee_id, work_date, checked_in_at) values ('00000000-0000-4000-b000-00000000000b', (now() at time zone 'Africa/Cairo')::date - 1, now() - interval '2 hours');
+select pg_temp.ok((public.svc_check_out('00000000-0000-4000-b000-00000000000b', '{"lat":29.9831944,"lng":31.3239444,"accuracy":8}') ->> 'worked_minutes')::int = 120, 'after-midnight check-out closes the previous day (120 min)');
+select pg_temp.ok((select count(*) from public.notification_outbox o join public.attendance_days a on a.id::text = o.event_ref
+  where o.event_type = 'check_out' and a.employee_id = '00000000-0000-4000-b000-00000000000b') = 1, 'owner check-out alert queued once');
+select pg_temp.ok((select count(*) from public.notification_outbox where event_type = 'check_in') >= 1, 'owner check-in alert queued');
+-- manual (exceptional) check-in by the owner
+select pg_temp.ok((public.svc_manual_check_in('00000000-0000-4000-b000-000000000001', jsonb_build_object('employee_id', '00000000-0000-4000-b000-00000000000b',
+  'date', (now() at time zone 'Africa/Cairo')::date - 2, 'time', '09:30', 'reason', 'forgot phone')) ->> 'attendance_id') is not null, 'owner records a forgotten check-in');
+select pg_temp.ok((select corrected and correction_reason = 'forgot phone' from public.attendance_days where employee_id = '00000000-0000-4000-b000-00000000000b'
+  and work_date = (now() at time zone 'Africa/Cairo')::date - 2), 'manual check-in is marked as a correction with its reason');
+select pg_temp.expect_err($$select public.svc_manual_check_in('00000000-0000-4000-b000-000000000001', jsonb_build_object('employee_id', '00000000-0000-4000-b000-00000000000b',
+  'date', (now() at time zone 'Africa/Cairo')::date - 2, 'time', '10:00', 'reason', 'again'))$$, 'already_checked_in', 'manual check-in cannot duplicate a day');
+select pg_temp.expect_err($$select public.svc_manual_check_in('00000000-0000-4000-b000-000000000001', jsonb_build_object('employee_id', '00000000-0000-4000-b000-00000000000b',
+  'date', (now() at time zone 'Africa/Cairo')::date + 1, 'time', '10:00', 'reason', 'future'))$$, 'invalid_time', 'manual check-in cannot be in the future');
+select pg_temp.expect_err($$select public.svc_manual_check_in('00000000-0000-4000-b000-000000000001', jsonb_build_object('employee_id', '00000000-0000-4000-b000-00000000000b',
+  'date', (now() at time zone 'Africa/Cairo')::date - 3, 'time', '10:00', 'reason', ''))$$, 'reason_required', 'manual check-in needs a reason');
+-- bot plumbing
+select pg_temp.ok(public.svc_bot_claim_update(777001) and not public.svc_bot_claim_update(777001), 'each Telegram update is processed once');
+select pg_temp.ok((select public.svc_bot_action_take('1360140225', public.svc_bot_action_create('1360140225', '{"t":"x"}'))) ->> 't' = 'x', 'pending action taken by its chat');
+do $$ declare v uuid := public.svc_bot_action_create('1360140225', '{"t":"y"}'); begin
+  perform pg_temp.ok(public.svc_bot_action_take('999', v) is null, 'another chat cannot take the action');
+  perform pg_temp.ok(public.svc_bot_action_take('1360140225', v) is not null and public.svc_bot_action_take('1360140225', v) is null, 'a confirmation works once (double tap = no-op)');
+end $$;
+select public.svc_bot_state('1360140225', true, '{"flow":"points"}');
+select pg_temp.ok(public.svc_bot_state('1360140225') ->> 'flow' = 'points', 'conversation state stored');
+select public.svc_bot_state('1360140225', true, null);
+select pg_temp.ok(public.svc_bot_state('1360140225') is null, 'conversation state cleared');
+select pg_temp.ok(jsonb_array_length(public.svc_bot_today(null) -> 'people') = 3, '/today lists every active employee');
+select pg_temp.ok((select count(*) from jsonb_array_elements(public.svc_bot_points(null) -> 'rows')) = 3, '/points standings for every active employee');
+select pg_temp.ok((public.svc_broadcast('00000000-0000-4000-b000-000000000001', '{"text":"اجتماع الساعة 10"}') ->> 'people')::int = 3, 'broadcast reaches every active employee');
+select pg_temp.expect_err($$select public.svc_broadcast(null, '{"text":"  "}')$$, 'invalid_text', 'empty broadcast refused');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-b000-00000000000a","session_id":"20000000-0000-4000-b000-00000000000a","role":"authenticated"}', true);
+set local role authenticated;
+select pg_temp.ok((select count(*) from public.announcements) = 1, 'staff can read the announcement');
+do $$ begin
+  insert into public.announcements (body) values ('spoof');
+  raise exception 'ASSERTION FAILED: staff wrote an announcement';
+exception when insufficient_privilege then raise notice 'ok: staff cannot write announcements'; end $$;
+do $$ begin
+  perform * from public.telegram_actions;
+  raise exception 'ASSERTION FAILED: staff read bot actions';
+exception when insufficient_privilege then raise notice 'ok: bot tables are service-role only'; end $$;
+reset role;
+
 select 'ENGINE TESTS PASSED' as result;

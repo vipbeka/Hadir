@@ -203,6 +203,14 @@ for (const g of [0, 1, 29, 30, 31]) {
   }
 }
 
+// ---------------------------------------------------------------- owner announcement on Home
+{
+  const { ctx, page } = await staffPage({ state: { announcements: [{ body: 'Meeting at 10 tomorrow', created_at: new Date().toISOString() }] } });
+  await page.waitForSelector('.announce');
+  check(/Announcement[\s\S]*Meeting at 10 tomorrow/.test(await page.textContent('.announce')), 'owner announcement (bot broadcast) shown on staff Home');
+  await ctx.close();
+}
+
 // ---------------------------------------------------------------- leaderboard tabs + home closing time
 {
   const { ctx, page, state } = await staffPage({ state: { closesAt: '11:00:00' } });

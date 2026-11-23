@@ -32,7 +32,7 @@ export async function webhookSecret(): Promise<string> {
 }
 
 const egp = (p: number) => `${(Number(p) / 100).toLocaleString("en-US")} ج.م`;
-const esc = (s: unknown) => String(s ?? "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!));
+export const esc = (s: unknown) => String(s ?? "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!));
 
 /** Owner messages (Arabic, with the product name). Never contains codes or salary. */
 export function formatOwnerMessage(p: Record<string, unknown>): { text: string; reply_markup?: unknown } {
@@ -48,13 +48,22 @@ export function formatOwnerMessage(p: Record<string, unknown>): { text: string; 
     case "early_leave_request":
       return {
         text: `${head}🕒 طلب انصراف مبكر #${esc(p.id)}\nالموظف: ${esc(p.employee)}\nالتاريخ: ${esc(p.date)} — الساعة ${esc(p.time)}\n${p.reason ? `السبب: ${esc(p.reason)}\n` : ""}\nيمكنك الرد بـ: موافق ${esc(p.id)} أو رفض ${esc(p.id)}`,
-        reply_markup: { inline_keyboard: [[{ text: "✅ موافقة", callback_data: `el:a:${p.id}` }, { text: "❌ رفض", callback_data: `el:r:${p.id}` }]] },
+        reply_markup: { inline_keyboard: [[{ text: "✅ قبول", callback_data: `el:a:${p.id}` }, { text: "❌ رفض", callback_data: `el:r:${p.id}` }]] },
       };
     case "leave_request": {
       const type = p.type === "sick" ? "مرضية" : "شخصية";
       const status = ({ pending: "بانتظار القرار", approved: "تمت الموافقة", rejected: "مرفوضة", cancelled: "ملغاة" } as Record<string, string>)[String(p.status)] ?? esc(p.status);
       const period = p.from === p.to ? esc(p.from) : `${esc(p.from)} ← ${esc(p.to)}`;
-      return { text: `${head}🌴 طلب إجازة ${type}: ${esc(p.employee)}\nالفترة: ${period} (${esc(p.days)} يوم)\n${p.reason ? `السبب: ${esc(p.reason)}\n` : ""}الحالة: ${status}\nراجعه من شاشة «الموافقات» ← «الإجازات».` };
+      return { text: `${head}🌴 طلب إجازة ${type}: ${esc(p.employee)}\nالفترة: ${period} (${esc(p.days)} يوم)\n${p.reason ? `السبب: ${esc(p.reason)}\n` : ""}الحالة: ${status}\nراجعه من شاشة «الموافقات» ← «الإجازات».`,
+        reply_markup: p.status === "pending" && typeof p.id === "string" ? { inline_keyboard: [[{ text: "✅ قبول", callback_data: `lv:a:${p.id}` }, { text: "❌ رفض", callback_data: `lv:r:${p.id}` }]] } : undefined };
+    }
+    case "check_in": {
+      const tag = p.outcome === "green" ? "🟢 نقطة خضراء" : "✅ حضور";
+      return { text: `${head}${tag}: ${esc(p.employee)} سجّل حضوره الساعة ${esc(p.time)}${p.window ? ` (${esc(p.window)})` : ""}` };
+    }
+    case "check_out": {
+      const m = Number(p.worked_minutes ?? 0);
+      return { text: `${head}🏁 ${esc(p.employee)} سجّل انصرافه الساعة ${esc(p.time)} — مدة العمل ${Math.floor(m / 60)} س ${m % 60} د` };
     }
     case "client_lockout":
     case "global_throttle":

@@ -3,8 +3,9 @@
 import { h, add, fill } from '../../core/dom.js';
 import { t, setDocumentTitle, getLang } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
+import { sb } from '../../core/supabase.js';
 import { errorMessage } from '../../core/errors.js';
-import { displayName, formatTime, formatClock, formatMinutes, formatLongDate, jobTitle } from '../../core/format.js';
+import { displayName, formatTime, formatClock, formatMinutes, formatLongDate, formatDateTime, jobTitle } from '../../core/format.js';
 import { pageHeader } from '../../shell/shell.js';
 import { card, chip, statCard, progress, alert, emptyState, skeletonCard } from '../../ui/display.js';
 import { button } from '../../ui/button.js';
@@ -44,7 +45,11 @@ export async function renderStaffHome(main, { me }) {
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, body);
   try {
-    const [day, sum] = await Promise.all([api('my_day'), api('my_summary')]);
+    const since = new Date(Date.now() - 7 * 864e5).toISOString();
+    const [day, sum, ann] = await Promise.all([api('my_day'), api('my_summary'),
+      // latest owner announcement (last 7 days); a failure here never blocks Home
+      sb.from('announcements').select('body,created_at').gte('created_at', since).order('created_at', { ascending: false }).limit(1)
+        .then((r) => (r.error ? null : r.data?.[0] || null), () => null)]);
     fill(greetHost, icon('hand'), t(cairoHour(day.server_now) < 12 ? 'home.greetMorning' : 'home.greetEvening'));
     const a = day.attendance;
     const goBtn = (label) => button({ label, variant: 'primary', size: 'lg', block: true, iconEnd: 'arrowRight', onClick: () => navigate('/staff/attendance') });
@@ -67,6 +72,10 @@ export async function renderStaffHome(main, { me }) {
       action = day.check_in_enabled ? goBtn(t('home.goCheckIn')) : null;
     }
     fill(body,
+      ann ? h('section', { class: 'card announce', role: 'status' },
+        h('span', { class: 'card__icon', 'aria-hidden': 'true' }, icon('bell')),
+        h('div', { class: 'announce__text' }, h('p', { class: 'announce__title' }, t('home.announcement')),
+          h('p', { class: 'announce__body' }, ann.body), h('p', { class: 'text-xs text-muted' }, formatDateTime(ann.created_at)))) : null,
       card({ iconName: 'calendarCheck', title: t('home.todayDate', { date: formatLongDate(day.business_date) }), actions: st, className: 'today-card',
         body: [h('div', { class: 'today-box' },
           h('span', { class: 'today-box__icon', 'aria-hidden': 'true' }, icon(ico)),

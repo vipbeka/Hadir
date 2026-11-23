@@ -118,6 +118,7 @@ export async function installMock(context, state = {}) {
       return json(200, state.employees.filter((e) => e.role === 'staff').map((e, i) => ({ rank: i + 1, full_name_ar: e.full_name_ar, full_name_en: e.full_name_en, job_title_ar: 'محاسب', job_title_en: 'Accountant', green: 7 - i, threshold: 30, is_me: e.id === who?.id })));
     }
     const tableData = {
+      announcements: state.announcements ?? [],
       point_events: [{ color: 'green', delta: 1, source: 'auto_window', reason: 'check-in 09:12', status: 'active', effective_work_date: today(), deduction_amount_piastres: 0 },
         { color: 'red', delta: 1, source: 'auto_window', reason: 'late', status: 'active', warning_only: true, effective_work_date: today(), deduction_amount_piastres: 0 }],
       leave_requests: [{ id: 'l1', type: 'personal', from_date: today(), to_date: today(), status: 'approved', reason: 'family' }],

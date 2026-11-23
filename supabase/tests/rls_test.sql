@@ -80,8 +80,21 @@ do $$ begin
   update public.profiles set role = 'owner' where id = '00000000-0000-4000-a000-000000000002';
   raise exception 'ASSERTION FAILED: staff escalated role';
 exception when insufficient_privilege then raise notice 'ok: staff cannot change own role'; end $$;
-insert into public.leave_requests (employee_id, type, from_date, to_date) values ('00000000-0000-4000-a000-000000000002', 'sick', '2026-12-01', '2026-12-02');
-select pg_temp.ok((select count(*) from public.leave_requests) = 1, 'staff can file own leave (pending)');
+do $$ begin
+  insert into public.leave_requests (employee_id, type, from_date, to_date) values ('00000000-0000-4000-a000-000000000002', 'sick', '2026-12-01', '2026-12-02');
+  raise exception 'ASSERTION FAILED: staff bypassed the API with a direct leave insert';
+exception when insufficient_privilege then raise notice 'ok: direct REST insert of leave is refused (must go through the validated API)'; end $$;
+do $$ begin
+  insert into public.early_leave_requests (employee_id, work_date, requested_leave_time) values ('00000000-0000-4000-a000-000000000002', current_date, '15:00');
+  raise exception 'ASSERTION FAILED: staff bypassed the API with a direct early-leave insert';
+exception when insufficient_privilege then raise notice 'ok: direct REST insert of early leave is refused'; end $$;
+reset role;
+-- the validated API path (what the Edge Function calls as service role)
+select public.svc_request_leave('00000000-0000-4000-a000-000000000002',
+  jsonb_build_object('type', 'sick', 'from_date', current_date + 7, 'to_date', current_date + 8));
+select pg_temp.as_user('00000000-0000-4000-a000-000000000002', '10000000-0000-4000-a000-000000000002');
+set local role authenticated;
+select pg_temp.ok((select count(*) from public.leave_requests) = 1, 'staff can file own leave through the API (pending) and read it');
 select pg_temp.ok((select status from public.leave_requests) = 'pending', 'new leave is pending');
 reset role;
 

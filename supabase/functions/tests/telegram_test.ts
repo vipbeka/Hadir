@@ -12,7 +12,9 @@ Deno.test("leave request message has employee, type, period, reason, status", ()
   assert(text.includes("أحمد علي") && text.includes("مرضية") && text.includes("2026-11-25") && text.includes("2026-11-26"), "fields");
   assert(text.includes("&lt;flu&gt;"), "reason escaped for HTML parse mode");
   assert(text.includes("بانتظار القرار"), "status");
-  assert(reply_markup === undefined, "no decision buttons added for leave (none existed before)");
+  // pending leave now carries ✅ قبول / ❌ رفض buttons handled by the admin bot
+  const kb = (reply_markup as { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> }).inline_keyboard[0];
+  assert(kb[0].text === "✅ قبول" && kb[0].callback_data === "lv:a:x" && kb[1].callback_data === "lv:r:x", "leave decision buttons");
 });
 
 Deno.test("single-day leave shows one date", () => {

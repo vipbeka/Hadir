@@ -71,7 +71,7 @@ serve(async (req, body) => {
   const ipHash = await hmac(`ip:${clientIp(req)}`);
   const devHash = await hmac(`dev:${deviceId}`);
 
-  const pre = await rpc<{ allowed: boolean; retry_after_s?: number }>("svc_login_precheck", { p_ip_hash: ipHash, p_device_hash: devHash });
+  const pre = await rpc<{ allowed: boolean; retry_after_s?: number; attempt_id?: number }>("svc_login_precheck", { p_ip_hash: ipHash, p_device_hash: devHash });
   if (!pre.allowed) {
     // A correct code is refused too while locked out (we don't even check it).
     await rpc("svc_login_record", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: false, p_profile: null, p_refused_locked: true });
@@ -83,7 +83,7 @@ serve(async (req, body) => {
   const match = code ? matchCode(code, candidates) : (matchCode("000000000000", candidates), null);
 
   if (!match || !match.active) {
-    const rec = await rpc<{ locked: boolean }>("svc_login_record", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: false, p_profile: null });
+    const rec = await rpc<{ locked: boolean }>("svc_login_record", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: false, p_profile: null, p_attempt: pre.attempt_id ?? null });
     await padTo(started);
     // Same message whether the code is malformed, unknown, or belongs to a
     // deactivated person. If this failure tripped the lockout, say so.
@@ -100,7 +100,7 @@ serve(async (req, body) => {
 
   const session = verified!.session!;
   const sessionId = String(jwtPayload(session.access_token).session_id ?? "");
-  await rpc("svc_login_record", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: true, p_profile: match.profile_id });
+  await rpc("svc_login_record", { p_ip_hash: ipHash, p_device_hash: devHash, p_success: true, p_profile: match.profile_id, p_attempt: pre.attempt_id ?? null });
   await rpc("svc_login_success", {
     p_profile: match.profile_id, p_session: sessionId,
     p_user_agent: uaSummary(req.headers.get("user-agent") ?? ""), p_approx_ip: approxIp(clientIp(req)),

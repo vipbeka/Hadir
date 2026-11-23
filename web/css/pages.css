@@ -266,3 +266,10 @@ details > summary { cursor: pointer; }
 .guide-list__item--red::before { background: var(--color-point-red-fill); }
 .guide-list__item--black::before { background: var(--color-point-black-fill); }
 .pts-guide { scroll-margin-block-start: calc(var(--topbar-height) + var(--space-4)); }
+
+/* owner announcement (sent from the Telegram admin bot) */
+.announce { flex-direction: row; align-items: flex-start; gap: var(--space-3); background: var(--color-reward-subtle); border-color: transparent; }
+.announce .card__icon { background: var(--color-surface); color: var(--color-reward-text); }
+.announce__text { display: flex; flex-direction: column; gap: var(--space-1); min-inline-size: 0; }
+.announce__title { font-weight: var(--font-weight-bold); color: var(--color-reward-text); }
+.announce__body { white-space: pre-line; overflow-wrap: anywhere; }
