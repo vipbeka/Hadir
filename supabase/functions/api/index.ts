@@ -30,6 +30,10 @@ const ACTIONS: Record<string, [string, Role]> = {
   run_job: ["svc_run_job", "owner"], set_job_title: ["svc_set_job_title", "owner"],
   broadcast: ["svc_broadcast", "owner"], list_announcements: ["svc_list_announcements", "owner"],
   delete_announcement: ["svc_delete_announcement", "owner"],
+  // owner Telegram reports (features 5–8); every function re-checks the owner
+  sched_ann_save: ["svc_sched_ann_save", "owner"], sched_ann_cancel: ["svc_sched_ann_cancel", "owner"],
+  sched_ann_list: ["svc_sched_ann_list", "owner"], bot_reports_status: ["svc_bot_reports_status", "owner"],
+  save_report_settings: ["svc_save_report_settings", "owner"], payroll_summary_resend: ["svc_payroll_summary_resend", "owner"],
 };
 
 serve(async (req, body) => {

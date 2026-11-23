@@ -13,6 +13,8 @@ export async function handle(update: Record<string, unknown>, d: Deps): Promise<
   const chatType = cq ? cq.message?.chat?.type : msg?.chat?.type;
   if (chatType === "private" && fromId !== owner) return;
   if (typeof update.update_id === "number" && !(await d.rpc<boolean>("svc_bot_claim_update", { p_update_id: update.update_id }))) return;
+  // the owner writing from a private chat proves the report destination
+  if (chatType === "private" && fromId === owner) await d.rpc("svc_owner_chat_verified", { p_chat: owner, p_type: "private" }).catch(() => null);
 
   const bot = new Bot(d, { chatId: owner, ownerId: String(ctx.owner_id) });
   if (cq) {

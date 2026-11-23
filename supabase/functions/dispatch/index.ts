@@ -1,5 +1,5 @@
 // =====================================================================
-// Zintra حاضر — dispatch (called every minute by pg_cron via pg_net)
+// حاضر (Hadir) — dispatch (called every minute by pg_cron via pg_net)
 // Sends due outbox messages: Telegram (owner) and Web Push (staff).
 // Authorised by a random token kept in Supabase Vault (x-zh-cron).
 // A failure is recorded and retried with backoff; it never blocks the
@@ -9,7 +9,7 @@
 import webpush from "web-push";
 import { serve, json, fail } from "../_shared/http.ts";
 import { rpc } from "../_shared/clients.ts";
-import { tg, formatOwnerMessage, isPermanentTelegramError, hasToken, webhookSecret } from "../_shared/telegram.ts";
+import { tg, formatOwnerMessage, isPermanentTelegramError, hasToken, webhookSecret, classifySend } from "../_shared/telegram.ts";
 
 // PUBLIC key (also shipped to the browser). The private key is the
 // Edge Function secret VAPID_PRIVATE_KEY.
@@ -42,6 +42,25 @@ async function telegramSetup() {
       last_error: r.last_error_message ?? null, error: hook.ok ? null : String(hook.description ?? "").slice(0, 120) } });
 }
 
+// Owner reports (weekly / payroll / absence / scheduled announcements) go
+// ONLY to the owner's chat once Telegram itself confirms it is a PRIVATE
+// chat (getChat type=private). Until then every report stays blocked.
+async function verifyOwnerChat() {
+  const chat = await rpc<string | null>("svc_owner_chat_needs_check").catch(() => null);
+  if (!chat || !hasToken()) return;
+  const r = await tg("getChat", { chat_id: chat });
+  const type = r.ok ? String((r.result as Record<string, unknown>)?.type ?? "") : "unreachable";
+  await rpc("svc_owner_chat_verified", { p_chat: chat, p_type: type });
+}
+
+/** Telegram outcome → outbox result (rules in classifySend). */
+async function report(id: string, res: Record<string, unknown> | null, err?: unknown) {
+  const o = classifySend(res, err);
+  const base = { p_id: id, p_ok: o.kind === "ok", p_ref: o.kind === "ok" ? o.ref : null, p_error: o.kind === "ok" ? null : o.error };
+  return rpc("svc_outbox_result_v2", { ...base, p_gone: o.kind === "gone", p_uncertain: o.kind === "uncertain",
+    p_retry_after_s: o.kind === "retry" ? o.retryAfter : null });
+}
+
 type Row = { id: string; channel: string; recipient: string; event_type: string; payload: Record<string, unknown>;
   push?: { endpoint: string; p256dh: string; auth: string } | null };
 
@@ -52,13 +71,30 @@ serve(async (req) => {
   if (vapidPrivate) webpush.setVapidDetails("https://hadar-ee191.web.app", VAPID_PUBLIC_KEY, vapidPrivate);
 
   await telegramSetup().catch((e) => console.error("telegram setup failed", e instanceof Error ? e.message : ""));
+  await verifyOwnerChat().catch(() => console.error("owner chat check failed"));
   let sent = 0, failed = 0;
   for (let round = 0; round < 4; round++) {
     const rows = await rpc<Row[]>("svc_claim_outbox", { p_limit: 25 });
     if (!rows.length) break;
     for (const r of rows) {
       try {
-        if (r.channel === "telegram") {
+        if (r.channel === "telegram" && r.event_type === "owner_report") {
+          // text is fetched server-side at send time (never in the outbox, never logged)
+          const part = await rpc<{ chat_id?: string; text?: string; blocked?: string }>("svc_owner_report_part", { p_outbox: r.id });
+          if (!part.text || part.chat_id !== r.recipient) {
+            failed++; await rpc("svc_outbox_result_v2", { p_id: r.id, p_ok: false, p_ref: null, p_error: `blocked: ${part.blocked ?? "no text"}`, p_gone: true });
+            continue;
+          }
+          let res: Record<string, unknown> | null = null; let err: unknown;
+          try { res = await tg("sendMessage", { chat_id: part.chat_id, text: part.text, disable_web_page_preview: true }); } catch (e) { err = e; }
+          if (res?.ok) sent++; else failed++;
+          await report(r.id, res, err);
+        } else if (r.channel === "telegram" && r.event_type === "telegram_delete") {
+          let res: Record<string, unknown> | null = null; let err: unknown;
+          try { res = await tg("deleteMessage", { chat_id: r.recipient, message_id: Number(r.payload.message_id) }); } catch (e) { err = e; }
+          if (res?.ok) sent++; else failed++;
+          await report(r.id, res, err);
+        } else if (r.channel === "telegram") {
           const msg = formatOwnerMessage(r.payload);
           const res = await tg("sendMessage", { chat_id: r.recipient, text: msg.text, parse_mode: "HTML", reply_markup: msg.reply_markup });
           if (res.ok) { sent++; await rpc("svc_outbox_result", { p_id: r.id, p_ok: true, p_ref: String((res.result as Record<string, unknown>)?.message_id ?? ""), p_error: null }); }

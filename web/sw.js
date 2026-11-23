@@ -9,7 +9,7 @@
  * - Web Push handlers are added in Step 5 (shift reminders).
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'zh-v7';
+const VERSION = 'zh-v8';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const PRECACHE = [

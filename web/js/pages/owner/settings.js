@@ -6,9 +6,9 @@ import { t, setDocumentTitle, getLang } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
 import { sb } from '../../core/supabase.js';
 import { errorMessage } from '../../core/errors.js';
-import { formatDateTime, formatClock, formatTime, hhmm } from '../../core/format.js';
+import { formatDateTime, formatClock, formatTime, hhmm, monthLabel } from '../../core/format.js';
 import { pageHeader } from '../../shell/shell.js';
-import { card, alert, emptyState, skeletonCard } from '../../ui/display.js';
+import { card, alert, badge, emptyState, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
 import { input, select, switchControl, setFieldError } from '../../ui/field.js';
 import { toast } from '../../ui/toast.js';
@@ -145,6 +145,9 @@ export async function renderSettings(main) {
         weekly_summary_enabled: chk(fWk), weekly_summary_dow: dow, weekly_summary_time: val(fWkT) });
     }, h('div', { class: 'cluster' }, tgBtn(t('set.tgConnect'), 'telegram_connect'), tgBtn(t('set.tgTest'), 'telegram_test'), tgStatus)));
     refreshTg();
+    const reportsSlot = h('div', {});
+    add(body, reportsSlot);
+    renderReports(reportsSlot);
     // persist a missing weekly day once (old rows stored NULL = "last work day")
     if (s.weekly_summary_dow == null) api('update_settings', { weekly_summary_dow: wkDow }).then((row) => { if (row) s = row; }).catch(() => {});
 
@@ -170,6 +173,66 @@ export async function renderSettings(main) {
     } }); return b; };
     add(body, card({ title: t('set.jobs'), body: h('div', { class: 'cluster' }, run(t('set.runAbsence'), 'absence'), run(t('set.runDigest'), 'digest')) }));
   }
+
+  // ---- owner Telegram reports (Sunday summary, payroll summary, absence alert)
+  async function renderReports(slot) {
+    fill(slot, skeletonCard(t('common.loading')));
+    let st;
+    try { st = await api('bot_reports_status'); }
+    catch (err) { fill(slot, card({ title: t('rep.title'), body: alert(errorMessage(err), { tone: 'danger' }) })); return; }
+    const dmy = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
+    const chatLine = st.owner_chat_verified
+      ? alert(t('rep.chatOk'), { tone: 'success' })
+      : alert(st.owner_chat_set ? t('rep.chatPending', { why: st.owner_chat_check && st.owner_chat_check !== 'private' ? t('rep.chatNotPrivate') : '' }) : t('rep.chatMissing'), { tone: 'warning' });
+    const fSun = switchControl({ label: t('rep.sunday'), checked: st.sunday_summary_enabled });
+    const sunPrev = h('p', { class: 'field__hint' }, t('rep.sundayPreview', { day: dmy(st.next_sunday), time: formatClock(st.weekly_summary_time),
+      from: dmy(st.next_week_start), to: dmy(st.next_week_end) }));
+    const fPay = switchControl({ label: t('rep.payroll'), checked: st.payroll_summary_enabled });
+    const fPayT = clockHint(time(t('rep.payrollTime'), st.payroll_summary_time));
+    const open = st.payroll_open_items || {};
+    const payPrev = h('p', { class: 'field__hint' }, t('rep.payrollPreview', { month: monthLabel(st.payroll_next_month), date: dmy(st.payroll_next_send_date) }));
+    const fStreak = switchControl({ label: t('rep.streak'), checked: st.absence_streak_enabled });
+    const fPolicy = select({ label: t('rep.leavePolicy'), value: st.absence_streak_leave_policy,
+      options: [{ value: 'pause', label: t('rep.leavePause') }, { value: 'break', label: t('rep.leaveBreak') }] });
+    const deliveries = (st.deliveries || []).length ? h('ul', { class: 'event-list', role: 'list' }, st.deliveries.map((d) => h('li', { class: 'event-row' },
+      h('div', { class: 'event-row__main' }, h('span', {}, t(`rep.kind.${d.kind}`), ' ', h('bdi', { class: 'num', dir: 'ltr' }, d.key.length > 20 ? '' : d.key),
+        d.version > 1 ? ` · v${d.version}` : ''), h('span', { class: 'text-xs text-muted' }, formatDateTime(d.created_at), d.error ? ` · ${d.error}` : '')),
+      badge(t(`rep.st.${d.status}`), { tone: { sent: 'success', pending: 'info', failed: 'danger', uncertain: 'warning' }[d.status] || 'neutral', dot: true }))))
+      : h('p', { class: 'text-sm text-muted' }, t('rep.noDeliveries'));
+    const blocked = (st.blocked_jobs || []).filter((j) => j.detail?.blocked || j.detail?.waiting).map((j) => alert(
+      j.detail.blocked ? t('rep.blockedChat', { job: t(`rep.job.${j.job}`), key: j.key }) : t('rep.waitingPayroll', { key: j.key,
+        abs: j.detail.waiting.absence_days_not_closed, black: j.detail.waiting.black_pending, out: j.detail.waiting.missing_checkouts }), { tone: 'warning' }));
+    const resend = button({ label: t('rep.resend'), size: 'sm', icon: 'fileText', onClick: async () => {
+      setLoading(resend, true);
+      try {
+        const r = await api('payroll_summary_resend', { month: prevMonth() });
+        toast({ title: r.unchanged ? t('rep.resendSame') : r.waiting ? t('rep.resendWaiting') : t('rep.resendQueued', { v: r.version }), tone: r.unchanged || r.waiting ? 'info' : 'success' });
+        renderReports(slot);
+      } catch (err) { toast({ title: t('error.title'), text: errorMessage(err), tone: 'danger' }); setLoading(resend, false); }
+    } });
+    const btn = button({ label: t('common.save'), variant: 'primary' });
+    const status = h('p', { class: 'save-status text-sm', 'aria-live': 'polite' });
+    btn.addEventListener('click', async () => {
+      if (!val(fPayT)) { setFieldError(fPayT, t('set.timeRequired')); return; }
+      setLoading(btn, true); status.className = 'save-status text-sm'; status.textContent = '';
+      try {
+        await api('save_report_settings', { sunday_summary_enabled: chk(fSun), payroll_summary_enabled: chk(fPay), payroll_summary_time: val(fPayT),
+          absence_streak_enabled: chk(fStreak), absence_streak_leave_policy: val(fPolicy) });
+        toast({ title: t('set.saved'), tone: 'success' }); renderReports(slot);
+      } catch (err) { status.classList.add('save-status--err'); status.setAttribute('role', 'alert'); status.textContent = `${t('set.notSaved')} ${errorMessage(err)}`; setLoading(btn, false); }
+    });
+    fill(slot, card({ title: h('span', { class: 'cluster cluster--sm' }, icon('bell'), t('rep.title')),
+      body: [h('p', { class: 'text-sm text-muted' }, t('rep.note')), chatLine, ...blocked,
+        h('div', { class: 'stack' },
+          h('div', {}, fSun, sunPrev),
+          h('div', { class: 'form-grid' }, h('div', {}, fPay, payPrev, open.open ? h('p', { class: 'field__hint' }, t('rep.openItems', { abs: open.absence_days_not_closed, black: open.black_pending, out: open.missing_checkouts })) : null), fPayT),
+          h('div', { class: 'form-grid' }, fStreak, fPolicy)),
+        h('h4', { class: 'card__subtitle' }, t('rep.recent')), deliveries, h('div', { class: 'cluster' }, resend)],
+      footer: [btn, status] }));
+  }
+  const prevMonth = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit' })
+    .formatToParts(new Date()).map((x) => [x.type, x.value])); const y = Number(p.year); const m = Number(p.month);
+    return m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`; };
 
   // ---- days & windows: ONE atomic save for every day (all or nothing),
   // then a fresh read from the database re-renders only this card.

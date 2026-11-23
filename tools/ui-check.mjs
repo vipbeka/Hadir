@@ -34,6 +34,8 @@ const pages = [
   ['owner-employee-dialog', '/index.html#/owner/employees', '87654321'],
   ['staff-leave-dialog', '/index.html#/staff/requests', '12345678'],
   ['owner-account', '/index.html#/owner/account', '87654321'],
+  ['owner-announcements', '/index.html#/owner/announcements', '87654321'],
+  ['staff-announcements', '/index.html#/staff/announcements', '12345678'],
   ['design', '/design/index.html', null],
 ];
 const only = process.env.UI_SIZES ? process.env.UI_SIZES.split(',') : null;

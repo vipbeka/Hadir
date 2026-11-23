@@ -71,7 +71,21 @@ function mockApi(state, who, action, p) {
       return { days };
     }
     case 'broadcast': { const a = { id: `a${Date.now()}${Math.random().toString(16).slice(2, 6)}`, title: p.title || null, body: p.text, created_at: new Date().toISOString() }; state.announcements.unshift(a); return { id: a.id, people: 1, devices: 0 }; }
-    case 'list_announcements': return { total: state.announcements.length, rows: [...state.announcements].sort((x, y) => y.created_at.localeCompare(x.created_at) || y.id.localeCompare(x.id)) };
+    case 'list_announcements': state.announcements ??= []; return { total: state.announcements.length, rows: [...state.announcements].sort((x, y) => y.created_at.localeCompare(x.created_at) || y.id.localeCompare(x.id)) };
+    case 'bot_reports_status': return Object.assign({ sunday_summary_enabled: false, payroll_summary_enabled: false, payroll_summary_time: '10:00', weekly_summary_time: '18:00',
+      absence_streak_enabled: false, absence_streak_leave_policy: 'pause', owner_chat_set: true, owner_chat_verified: !!state.chatVerified, owner_chat_check: null,
+      next_sunday: '2026-11-29', next_week_start: '2026-11-22', next_week_end: '2026-11-28', payroll_next_month: '2026-11-01', payroll_next_send_date: '2026-12-01',
+      payroll_open_items: { absence_days_not_closed: 0, black_pending: 1, missing_checkouts: 0, salary_missing: 1, open: true },
+      deliveries: [{ kind: 'weekly_owner', key: '2026-11-15', version: 1, created_at: '2026-11-22T16:00:00Z', parts: 1, status: 'sent' },
+        { kind: 'absence_streak', key: 'x'.repeat(40), version: 1, created_at: '2026-11-20T09:31:00Z', parts: 1, status: 'uncertain', error: 'uncertain: network: TypeError' }],
+      blocked_jobs: [], streaks: [] }, state.reportSettings || {});
+    case 'save_report_settings': state.reportSettings = { ...(state.reportSettings || {}), ...p }; (state.reportSaves ??= []).push(p); return mockApi(state, who, 'bot_reports_status', {});
+    case 'sched_ann_list': return state.sched ?? [];
+    case 'sched_ann_save': { state.sched ??= []; const row = { id: p.id || `s${state.sched.length + 1}`, title: p.title || null, body: p.body, destination: p.destination, publish_local: p.publish_local,
+      delete_after_minutes: p.delete_after_minutes, status: 'scheduled', delete_status: 'none', messages: 0 };
+      const i = state.sched.findIndex((x) => x.id === row.id); if (i >= 0) state.sched[i] = row; else state.sched.unshift(row); return { id: row.id, status: 'scheduled' }; }
+    case 'sched_ann_cancel': { const x = (state.sched || []).find((r) => r.id === p.id); if (!x) throw Object.assign(new Error(), { code: 'not_found' }); x.status = 'canceled'; return { id: x.id, status: 'canceled' }; }
+    case 'payroll_summary_resend': return { report_id: 'r', version: 2 };
     case 'delete_announcement': { const i = state.announcements.findIndex((a) => a.id === p.id); if (i < 0) return { id: p.id, deleted: false }; state.announcements.splice(i, 1); return { id: p.id, deleted: true }; }
     default: return { result: 'decided' };
   }
@@ -116,7 +130,7 @@ export async function installMock(context, state = {}) {
     }
     if (url.pathname === '/functions/v1/api') {
       if (!sessionOk) return json(401, { error: 'unauthorized' });
-      const ownerOnly = ['owner_dashboard', 'pending', 'decide_black', 'payroll', 'export_raw', 'employee_points', 'award_outcome', 'manual_adjust', 'update_settings', 'save_day', 'save_days', 'save_holiday', 'broadcast', 'list_announcements', 'delete_announcement', 'run_job', 'set_job_title'];
+      const ownerOnly = ['owner_dashboard', 'pending', 'decide_black', 'payroll', 'export_raw', 'employee_points', 'award_outcome', 'manual_adjust', 'update_settings', 'save_day', 'save_days', 'save_holiday', 'broadcast', 'list_announcements', 'delete_announcement', 'bot_reports_status', 'save_report_settings', 'sched_ann_list', 'sched_ann_save', 'sched_ann_cancel', 'payroll_summary_resend', 'run_job', 'set_job_title'];
       if (ownerOnly.includes(body.action) && who.role !== 'owner') return json(403, { error: 'forbidden' });
       if (body.action === 'telegram_status') return json(200, { data: { connected: false, token_missing: true } });
       const hook = state.hook?.(body.action);

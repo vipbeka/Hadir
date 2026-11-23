@@ -23,6 +23,23 @@ export function isPermanentTelegramError(r: Record<string, unknown>): boolean {
   return c === 400 || c === 401 || c === 403 || c === 404;
 }
 
+/** How one Telegram call ended, for the outbox:
+ *  ok · retry (definite Telegram refusal that may pass later; 429 honours retry_after)
+ *  · gone (permanent: blocked bot, bad chat, cannot delete…)
+ *  · uncertain (no/garbled reply: Telegram may have accepted it → never auto-resent). */
+export type SendOutcome = { kind: "ok"; ref: string } | { kind: "retry"; error: string; retryAfter: number | null }
+  | { kind: "gone"; error: string } | { kind: "uncertain"; error: string };
+export function classifySend(res: Record<string, unknown> | null, err?: unknown): SendOutcome {
+  if (res?.ok) { const mid = (res.result as Record<string, unknown> | undefined)?.message_id; return { kind: "ok", ref: mid == null ? "ok" : String(mid) }; }
+  if (!res) return { kind: "uncertain", error: `network: ${err instanceof Error ? err.name : "error"}` };
+  const code = Number(res.error_code ?? 0);
+  const error = `telegram ${code}: ${String(res.description ?? "error").slice(0, 120)}`;
+  if (code === 429) return { kind: "retry", error, retryAfter: Number((res.parameters as Record<string, unknown> | undefined)?.retry_after ?? 0) || null };
+  if (code >= 500 || code === 0) return { kind: "uncertain", error };
+  if (isPermanentTelegramError(res)) return { kind: "gone", error };
+  return { kind: "retry", error, retryAfter: null };
+}
+
 /** Secret the webhook URL is registered with (X-Telegram-Bot-Api-Secret-Token). */
 export async function webhookSecret(): Promise<string> {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(`zh-tg-v1|${serviceKeyForHmac()}`),

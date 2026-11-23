@@ -11,7 +11,7 @@ mkdir -p "$WORK"
 # Postgres refuses to run as root; use the postgres OS user when needed.
 AS=()
 if [ "$(id -u)" = 0 ]; then chown postgres "$WORK"; AS=(runuser -u postgres --); fi
-"${AS[@]}" "$PGBIN/initdb" -D "$WORK/data" -U postgres -A trust >/dev/null
+"${AS[@]}" "$PGBIN/initdb" -D "$WORK/data" -U postgres -A trust -E UTF8 --locale=C.UTF-8 >/dev/null
 "${AS[@]}" "$PGBIN/pg_ctl" -D "$WORK/data" -o "-p $PORT -k $WORK -c listen_addresses=''" -l "$WORK/log" start >/dev/null
 trap '"${AS[@]}" "$PGBIN/pg_ctl" -D "$WORK/data" stop -m fast >/dev/null; rm -rf "$WORK"' EXIT
 PSQL=(psql -h "$WORK" -p $PORT -U postgres -d postgres -v ON_ERROR_STOP=1 -q -X)
@@ -22,6 +22,7 @@ down() { for f in $(ls "$ROOT"/supabase/rollback/*.down.sql | sort -r); do grep 
 echo "== apply migrations"; up
 echo "== RLS tests"; { echo "begin;"; cat "$ROOT/supabase/tests/rls_test.sql"; echo "rollback;"; } | "${PSQL[@]}" 2>&1 | grep -E "ok:|PASSED|FAILED|ERROR" | sed 's/^NOTICE:  //'
 echo "== engine tests"; { echo "begin;"; cat "$ROOT/supabase/tests/engine_test.sql"; echo "rollback;"; } | "${PSQL[@]}" 2>&1 | grep -E "ok:|PASSED|FAILED|ERROR" | sed 's/^NOTICE:  //'
+echo "== owner report tests"; { echo "begin;"; cat "$ROOT/supabase/tests/owner_reports_test.sql"; echo "rollback;"; } | "${PSQL[@]}" 2>&1 | grep -E "ok:|PASSED|FAILED|ERROR" | sed 's/^NOTICE:  //'
 echo "== rollback"; down
 "${PSQL[@]}" -tAc "select 'tables left in public: ' || count(*) from information_schema.tables where table_schema='public'"
 echo "== re-apply"; up
