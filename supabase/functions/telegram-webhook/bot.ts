@@ -68,6 +68,27 @@ export function parseWhen(input: string): { date: string | null; time: string } 
   return { date: m ? m[1] : null, time };
 }
 
+/** Cairo wall clock now → { date: "YYYY-MM-DD", time: "HH:MM" }. */
+export function cairoNow(d = new Date()): { date: string; time: string } {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d).map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+}
+const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+/** Owner-typed publish time (Cairo): «10:30 ص», «بكرة 9:00», «2026-11-30 10:00».
+ *  A bare time already passed today means tomorrow. The server still rejects
+ *  times skipped/repeated by daylight saving and anything out of range. */
+export function parseScheduleWhen(input: string, now = cairoNow()): string | null {
+  let s = asciiDigits(input).trim().replace(/\s+/g, " ");
+  let day: string | null = null;
+  const rel = /^(النهارده|النهاردة|اليوم|today|بكرة|بكره|غدا|غدًا|tomorrow)\s+(.+)$/i.exec(s);
+  if (rel) { day = /^(بكرة|بكره|غدا|غدًا|tomorrow)$/i.test(rel[1]) ? addDays(now.date, 1) : now.date; s = rel[2]; }
+  const w = parseWhen(s);
+  if (!w) return null;
+  const date = w.date ?? day ?? (w.time <= now.time ? addDays(now.date, 1) : now.date);
+  return `${date}T${w.time}`;
+}
+
 const EN_LABEL: Record<string, string> = { "مبكر": "Early", "عادي": "Normal", "متأخر": "Late", "صباحي": "Morning", "مسائي": "Evening" };
 /** Lines like «مبكر 07:00-08:00» → windows, sorted and non-overlapping. */
 export function parseWindows(input: string): Array<{ label_ar: string; label_en: string; start: string; end: string }> | null {
@@ -131,6 +152,11 @@ const ERR: Record<string, string> = {
   invalid_window: "صيغة النوافذ مش صحيحة.", not_found: "مش لاقي الطلب ده.", invalid_transition: "مينفعش تغيّر الطلب ده.",
   invalid_text: "النص فاضي أو طويل جدًا.", cannot_deactivate_self: "مينفعش توقف حسابك.", last_owner: "لازم يفضل مالك واحد على الأقل.",
   forbidden: "مش مسموح لك بالعملية دي.",
+  local_time_nonexistent: "الوقت ده مش موجود في اليوم ده (بداية التوقيت الصيفي). اختار وقت تاني.",
+  local_time_ambiguous: "الوقت ده بيتكرر مرتين في اليوم ده (نهاية التوقيت الصيفي). اختار وقت تاني.",
+  schedule_out_of_range: "الموعد لازم يكون بعد دقيقة على الأقل وخلال 90 يوم.", invalid_delete_after: "مدة الحذف دي مش مسموحة.",
+  owner_chat_unverified: "محادثتك لسه ما اتأكدتش — ابعت أي رسالة للبوت وجرّب تاني.", not_editable: "مينفعش تعدّل أو تلغي بعد ما الإرسال بدأ.",
+  invalid_destination: "الوجهة دي مش مسموحة.",
   create_failed: "حصلت مشكلة وإحنا بنضيف الموظف — مفيش حاجة اتعملت، جرّب تاني.", invalid_amount: "المبلغ لازم يكون جنيهات صحيحة.",
 };
 export function errText(e: unknown): string {
@@ -150,7 +176,12 @@ export const MAIN_MENU: Kb = [
   [{ text: "⭐ النقاط", callback_data: "m:pts" }, { text: "🕘 حضور استثنائي", callback_data: "m:att" }],
   [{ text: "📊 التقارير", callback_data: "m:rep" }, { text: "⚙️ الإعدادات", callback_data: "m:set" }],
   [{ text: "📢 إعلان للموظفين", callback_data: "m:bc" }, { text: "🗑️ حذف إعلان", callback_data: "m:ad" }],
+  [{ text: "🗓️ إعلان مجدول", callback_data: "m:sa" }, { text: "📋 الإعلانات المجدولة", callback_data: "m:sal" }],
 ];
+const SA_DELS: Array<[number, string]> = [[0, "بدون حذف"], [60, "ساعة"], [360, "6 ساعات"], [1440, "24 ساعة"], [2820, "47 ساعة"], [4320, "3 أيام"], [10080, "7 أيام"]];
+const saWhen = (local: string) => { const [d, t] = local.split("T"); const [y, m, dd] = d.split("-"); return `${dd}/${m}/${y} الساعة ${fmtClock(t)} (القاهرة)`; };
+const fmtClock = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "م" : "ص"}`; };
+const SA_STATUS: Record<string, string> = { scheduled: "🕒 مجدول", sending: "📤 جارٍ الإرسال", published: "✅ منشور", failed: "⚠️ فشل", canceled: "🚫 ملغي", uncertain: "❔ غير مؤكد" };
 const AD_PAGE = 5;
 type Ann = { id: string; title: string | null; body: string; created_at: string };
 const annPreview = (a: Ann, n = 60) => {
@@ -267,6 +298,21 @@ export class Bot {
         if (!Number.isInteger(n) || n < 0 || n > 100000) return this.send("ابعت المبلغ بالجنيه (رقم صحيح):");
         return this.confirm(`💰 قيمة المكافأة الشهرية الجديدة: <b>${n} ج.م</b>`, { t: "set", patch: { reward_amount_piastres: n * 100 }, what: "قيمة المكافأة" });
       }
+      case "sa": {
+        const data = (st.data as Record<string, string>) ?? {};
+        if (st.step === "body") {
+          if (t.length > 4000) return this.send("الإعلان طويل جدًا (أقصى حاجة 4000 حرف).");
+          await this.setState({ flow: "sa", step: "dest", data: { body: t } });
+          return this.send("فين يتنشر؟", kb([[{ text: "📱 التطبيق — كل الموظفين", callback_data: "sa:d:app" }],
+            [{ text: "💬 محادثتي الخاصة هنا", callback_data: "sa:d:tg" }]]));
+        }
+        if (st.step === "when") {
+          const local = parseScheduleWhen(t);
+          if (!local) return this.send("مش فاهم الموعد 🙏 ابعته كده: <code>10:30 ص</code> أو <code>بكرة 9:00</code> أو <code>2026-11-30 10:00</code>");
+          return this.askDelete({ ...data, local });
+        }
+        return this.send("اختار من الأزرار اللي فوق، أو ابعت /cancel.");
+      }
       case "bc": {
         if (t.length > 1000) return this.send("الإعلان طويل جدًا (أقصى حاجة 1000 حرف).");
         return this.confirm(`📢 الإعلان ده هيوصل لكل الموظفين (إشعار + يظهر في التطبيق):\n\n«${esc(t)}»`, { t: "bc", text: t });
@@ -295,6 +341,10 @@ export class Bot {
         case "set": return this.settingsMenu();
         case "bc": return this.startBroadcast();
         case "ad": return this.announcementsPage(0);
+        case "sa":
+          await this.setState({ flow: "sa", step: "body" });
+          return this.send("🗓️ إعلان مجدول — اكتب نص الإعلان:\n(ابعت /cancel للإلغاء)");
+        case "sal": return this.scheduledList();
         case "newemp":
           await this.setState({ flow: "emp_new", step: "name_ar", data: {} });
           return this.send("➕ موظف جديد — ابعت الاسم بالعربي:\n(ابعت /cancel للإلغاء)");
@@ -302,6 +352,13 @@ export class Bot {
     }
     if ((m = /^ad:p:(\d{1,3})$/.exec(data))) return this.announcementsPage(Number(m[1]), messageId);
     if ((m = new RegExp(`^ad:v:(\\d{1,3}):(${UUID})$`).exec(data))) return this.announcementPreview(Number(m[1]), m[2]);
+    if ((m = /^sa:(d|w|x):([a-z0-9]{1,10})$/.exec(data))) return this.onSchedButton(m[1], m[2]);
+    if ((m = new RegExp(`^sa:c:(${UUID})$`).exec(data))) {
+      const row = ((await this.d.rpc<Array<Record<string, unknown>>>("svc_sched_ann_list", { p_actor: this.c.ownerId, p: {} })) || []).find((x) => x.id === m![1]);
+      if (!row || row.status !== "scheduled") return this.send("ℹ️ الإعلان ده مش مجدول دلوقتي (اتبعت أو اتلغى).", kb([[{ text: "📋 الإعلانات المجدولة", callback_data: "m:sal" }], back()]));
+      return this.confirm(`🚫 إلغاء الإعلان المجدول؟\n• ${esc(saWhen(String(row.publish_local)))}\n\n«${esc(String(row.body).slice(0, 300))}»`, { t: "sa_cancel", id: row.id });
+    }
+    if (data.startsWith("sa:")) return this.send("ℹ️ الزرار ده قديم. ابدأ من تاني:", kb([[{ text: "🗓️ إعلان مجدول", callback_data: "m:sa" }], back()]));
     if (data.startsWith("ad:")) return this.send("ℹ️ الزرار ده قديم. افتح القائمة تاني:", kb([[{ text: "🗑️ حذف إعلان", callback_data: "m:ad" }], back()]));
     if (data === "r:today") return this.today();
     if (data === "r:points") return this.points();
@@ -530,6 +587,53 @@ export class Bot {
       { t: "ad_del", id: a.id, preview: annPreview(a, 80) });
   }
 
+  // ---------------------------------------------------------- scheduled announcements (feature 5)
+  private async onSchedButton(kind: string, v: string) {
+    const st = await this.state();
+    const data = (st?.data as Record<string, string>) ?? {};
+    if (!st || st.flow !== "sa") return this.send("ℹ️ الزرار ده قديم. ابدأ من تاني:", kb([[{ text: "🗓️ إعلان مجدول", callback_data: "m:sa" }], back()]));
+    if (kind === "d" && st.step === "dest" && (v === "app" || v === "tg")) {
+      const dest = v === "app" ? "staff_app" : "owner_telegram";
+      if (dest === "staff_app" && String(data.body ?? "").length > 1000) return this.send("إعلان التطبيق أقصاه 1000 حرف. اختار «محادثتي الخاصة» أو ابدأ من تاني بنص أقصر.");
+      await this.setState({ flow: "sa", step: "when", data: { ...data, dest } });
+      return this.send("⏰ إمتى يتنشر؟ (بتوقيت القاهرة)\nاختار، أو ابعت الموعد كده: <code>10:30 ص</code> · <code>بكرة 9:00</code> · <code>2026-11-30 10:00</code>",
+        kb([[{ text: "بعد ساعة", callback_data: "sa:w:h1" }, { text: "بعد 3 ساعات", callback_data: "sa:w:h3" }], [{ text: "بكرة 9:00 ص", callback_data: "sa:w:tm9" }]]));
+    }
+    if (kind === "w" && st.step === "when") {
+      const now = cairoNow();
+      const plus = (min: number) => cairoNow(new Date(Date.now() + min * 60000));
+      const at = v === "h1" ? plus(60) : v === "h3" ? plus(180) : v === "tm9" ? { date: addDays(now.date, 1), time: "09:00" } : null;
+      if (!at) return this.send("ℹ️ اختيار غير معروف.");
+      return this.askDelete({ ...data, local: `${at.date}T${at.time}` });
+    }
+    if (kind === "x" && st.step === "del") {
+      const min = Number(v);
+      if (!SA_DELS.some(([n]) => n === min) || (data.dest === "owner_telegram" && min > 2820)) return this.send("ℹ️ مدة غير مسموحة.");
+      await this.setState(null);
+      return this.confirm([`🗓️ إعلان مجدول:`, `• الموعد: ${esc(saWhen(String(data.local)))}`,
+        `• الوجهة: ${data.dest === "staff_app" ? "التطبيق — كل الموظفين (مع إشعار)" : "محادثتك الخاصة هنا"}`,
+        `• حذف تلقائي: ${min ? `بعد ${SA_DELS.find(([n]) => n === min)![1]}` : "لا"}`, "", `«${esc(String(data.body).slice(0, 700))}${String(data.body).length > 700 ? "…" : ""}»`].join("\n"),
+        { t: "sa_save", body: data.body, dest: data.dest, local: data.local, del: min || null });
+    }
+    return this.send("ℹ️ الزرار ده مش في مكانه. ابدأ من تاني:", kb([[{ text: "🗓️ إعلان مجدول", callback_data: "m:sa" }], back()]));
+  }
+
+  private async askDelete(data: Record<string, string>) {
+    await this.setState({ flow: "sa", step: "del", data });
+    const opts = SA_DELS.filter(([n]) => data.dest === "staff_app" || n <= 2820);   // Telegram: < 48 h only
+    const rows: Kb = []; for (let i = 0; i < opts.length; i += 3) rows.push(opts.slice(i, i + 3).map(([n, l]) => ({ text: n ? `🗑️ ${l}` : l, callback_data: `sa:x:${n}` })));
+    return this.send(`🕒 ${esc(saWhen(data.local))}\nيتمسح تلقائيًا بعد النشر؟`, kb(rows));
+  }
+
+  async scheduledList() {
+    const rows = (await this.d.rpc<Array<Record<string, unknown>>>("svc_sched_ann_list", { p_actor: this.c.ownerId, p: {} })) || [];
+    if (!rows.length) return this.send("📭 مفيش إعلانات مجدولة.", kb([[{ text: "🗓️ إعلان مجدول", callback_data: "m:sa" }], back()]));
+    const shown = rows.slice(0, 10);
+    const lines = shown.map((r, i) => `${i + 1}. ${SA_STATUS[String(r.status)] ?? r.status} — ${esc(saWhen(String(r.publish_local)))}\n   ${r.destination === "staff_app" ? "📱 التطبيق" : "💬 محادثتك"} · «${esc(String(r.body).replace(/\s+/g, " ").slice(0, 60))}»${r.delete_status === "failed" ? "\n   ⚠️ الحذف التلقائي فشل" : ""}`);
+    const cancel: Kb = shown.map((r, i) => (r.status === "scheduled" ? [{ text: `🚫 إلغاء رقم ${i + 1}`, callback_data: `sa:c:${r.id}` }] : null)).filter(Boolean) as Kb;
+    return this.send(`📋 الإعلانات المجدولة (آخر ${shown.length}):\n\n${lines.join("\n")}`, kb([...cancel, [{ text: "🗓️ إعلان مجدول جديد", callback_data: "m:sa" }], back()]));
+  }
+
   async startBroadcast() {
     await this.setState({ flow: "bc" });
     return this.send("📢 اكتب الإعلان اللي عايز توصّله لكل الموظفين:\n(ابعت /cancel للإلغاء)");
@@ -586,6 +690,15 @@ export class Bot {
           const r = await this.d.rpc<Record<string, unknown>>("svc_delete_announcement", { p_actor: this.c.ownerId, p: { id: a.id, via: "telegram" } });
           return this.edit(messageId, r?.deleted ? `✅ اتحذف الإعلان: «${esc(a.preview)}»\nاختفى من التطبيق عند كل الموظفين.`
             : "ℹ️ الإعلان ده كان اتحذف قبل كده.", kb([[{ text: "🗑️ حذف إعلان تاني", callback_data: "m:ad" }], back()]));
+        }
+        case "sa_save": {
+          await this.d.rpc("svc_sched_ann_save", { p_actor: this.c.ownerId,
+            p: { body: a.body, destination: a.dest, publish_local: a.local, delete_after_minutes: a.del } });
+          return this.edit(messageId, `✅ اتجدول الإعلان — هيتنشر ${esc(saWhen(String(a.local)))}.`, kb([[{ text: "📋 الإعلانات المجدولة", callback_data: "m:sal" }], back()]));
+        }
+        case "sa_cancel": {
+          await this.d.rpc("svc_sched_ann_cancel", { p_actor: this.c.ownerId, p: { id: a.id } });
+          return this.edit(messageId, "🚫 اتلغى الإعلان المجدول، ومش هيتنشر.", kb([[{ text: "📋 الإعلانات المجدولة", callback_data: "m:sal" }], back()]));
         }
         case "bc": {
           const r = await this.d.rpc<Record<string, unknown>>("svc_broadcast", { p_actor: this.c.ownerId, p: { text: a.text } });
