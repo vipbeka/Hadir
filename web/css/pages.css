@@ -466,3 +466,5 @@ details > summary { cursor: pointer; }
 .ann-item__actions { flex: none; }
 .ann-quote { margin: 0 0 var(--space-3); padding: var(--space-3); border-inline-start: 3px solid var(--color-primary); background: var(--color-surface-sunken); border-radius: var(--radius-md); overflow-wrap: anywhere; }
 .ann-full { white-space: pre-line; overflow-wrap: anywhere; }
+.event-row__main .cluster { flex-wrap: wrap; }
+.event-row__main .badge { white-space: normal; max-inline-size: 100%; }

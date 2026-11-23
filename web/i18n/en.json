@@ -680,7 +680,7 @@
   "set.windowInvalid": "{day}: every window needs both names and a start before its end.",
   "set.tagGreen": "green",
   "set.tagRed": "red",
-  "hol.provisional": "Estimated — awaiting official announcement",
+  "hol.provisional": "Estimated date",
   "hol.confirm": "Confirm date",
   "hol.years": "Years",
   "nf.title": "Page not found",

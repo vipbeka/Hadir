@@ -44,7 +44,8 @@ const themesFor = (w) => (w === 360 || w === 1440 ? ['light', 'dark'] : ['light'
 
 const browser = await chromium.launch();
 let failures = 0;
-for (const [name, url, code] of pages) {
+const onlyPages = process.env.UI_PAGES ? process.env.UI_PAGES.split(',') : null;
+for (const [name, url, code] of pages.filter(([n]) => !onlyPages || onlyPages.includes(n))) {
   for (const [width, height, orient] of sizes) {
     const touch = width <= 1024 && width !== 1280;
     for (const lang of langs) {
