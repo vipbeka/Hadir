@@ -57,8 +57,11 @@
   background: var(--gradient-cta);
   box-shadow: var(--shadow-sm);
 }
-.btn--primary:disabled:not([aria-busy="true"]) { background: var(--color-cta-disabled); color: var(--color-cta-disabled-text); border-color: transparent; }
-.btn--lg { border-radius: var(--radius-lg); }
+.btn--primary:disabled:not([aria-busy="true"]) { background: var(--color-cta-disabled); color: var(--color-cta-disabled-text); border-color: transparent; box-shadow: none; }
+.btn--primary:not(:disabled) { box-shadow: var(--shadow-cta); }
+.btn--lg { border-radius: var(--radius-pill); }
+/* outlined action (reference: early-leave «إرسال») */
+.btn--outline { --btn-bg: transparent; --btn-fg: var(--color-primary-text); --btn-border: var(--color-primary-text); border-width: var(--border-width-strong); }
 .btn--primary:hover:not(:disabled), .btn--primary.is-hover { box-shadow: var(--shadow-md); }
 
 .btn--secondary { /* defaults above */ }
@@ -253,7 +256,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: var(--space-5);
+  padding: var(--space-5) var(--space-4);
   background: var(--color-surface);
   border: var(--border-width) solid var(--color-card-border);
   border-radius: var(--radius-xl);

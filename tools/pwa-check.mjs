@@ -22,7 +22,7 @@ check(man.errors.length === 0, `manifest parses without errors ${JSON.stringify(
 const inst = await cdp.send('Page.getInstallabilityErrors');
 check(inst.installabilityErrors.length === 0, `no installability errors ${JSON.stringify(inst.installabilityErrors)}`);
 const parsed = JSON.parse(man.data);
-check(parsed.name === 'Zintra حاضر' && parsed.display === 'standalone', 'name "Zintra حاضر", display standalone');
+check(parsed.name === 'حاضر' && parsed.display === 'standalone', 'name "حاضر", display standalone');
 for (const src of [...parsed.icons, ...parsed.screenshots].map((i) => i.src)) {
   const r = await page.request.get(`${base}/${src}`);
   check(r.ok(), `asset reachable: ${src}`);
@@ -39,7 +39,7 @@ await page.waitForSelector('input[name=code]', { timeout: 8000 });
 check(true, 'app shell (login) loads with the network OFF');
 const p2 = await ctx.newPage();
 await p2.goto(`${base}/some/unknown/page`, { waitUntil: 'domcontentloaded' }).catch(() => {});
-{ const c = await p2.content(); check(c.includes('Zintra') && !/ERR_INTERNET_DISCONNECTED/.test(c), 'unknown navigation offline is served by the app (not the browser error page)'); }
+{ const c = await p2.content(); check(c.includes('حاضر') && !/ERR_INTERNET_DISCONNECTED/.test(c), 'unknown navigation offline is served by the app (not the browser error page)'); }
 await ctx.setOffline(false);
 check(errors.length === 0, `no page errors (${errors.join(' | ')})`);
 // iOS meta

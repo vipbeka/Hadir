@@ -7,15 +7,12 @@ import { t, setDocumentTitle, getLang } from '../core/i18n.js';
 import { sb } from '../core/supabase.js';
 import { api } from '../core/api.js';
 import { errorMessage } from '../core/errors.js';
-import { monthLabel, formatTime } from '../core/format.js';
 import { pageHeader } from '../shell/shell.js';
-import { card, chip, progress, badge, emptyState, skeletonCard } from '../ui/display.js';
+import { chip, progress, badge, emptyState, skeletonCard } from '../ui/display.js';
 import { icon } from '../ui/icons.js';
 
 const name = (r) => (getLang() === 'ar' ? r.full_name_ar : r.full_name_en);
 const job = (r) => (getLang() === 'ar' ? r.job_title_ar || r.job_title_en : r.job_title_en || r.job_title_ar);
-const initial = (r) => String(name(r) || '').trim().charAt(0);
-const cairoMonth = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit' }).format(new Date()) + '-01';
 
 async function fetchBoard(scope) {
   const { data, error } = await sb.rpc('get_leaderboard', { p_scope: scope });
@@ -27,7 +24,7 @@ async function fetchBoard(scope) {
 
 export async function renderLeaderboard(main, { me }) {
   setDocumentTitle(t('lb.title'));
-  add(main, pageHeader({ chips: [chip(monthLabel(cairoMonth()), { dot: true })], title: t('lb.title'), subtitle: t('lb.subtitle') }));
+  add(main, pageHeader({ iconName: 'trophy', title: t('lb.title'), subtitle: t('lb.subtitle') }));
   let scope = 'month';
   const tabs = h('div', { class: 'tabs', role: 'tablist', 'aria-label': t('lb.title') },
     [['month', 'lb.tabMonth'], ['prev', 'lb.tabPrev'], ['all', 'lb.tabAll']].map(([k, label]) =>
@@ -64,30 +61,30 @@ export async function renderLeaderboard(main, { me }) {
       return;
     }
     if (!rows.some((r) => Number(r.green) > 0)) {
-      add(body, h('section', { class: 'card lb-zero', role: 'status' },
-        h('span', { class: 'lb-zero__icon', 'aria-hidden': 'true' }, icon('trophy'), h('span', { class: 'lb-zero__spark' }, icon('sparkle'))),
-        h('div', { class: 'lb-zero__text' },
-          h('p', { class: 'lb-zero__title' }, scope === 'month' ? t('lb.zeroNote') : t('lb.zeroPeriod')),
-          scope === 'month' ? chip(t('lb.zeroChip'), { iconName: 'clock', tone: 'success' }) : null)));
+      // nobody has points yet: a dashed note above the (still visible) list
+      add(body, h('section', { class: 'lb-empty', role: 'status' },
+        h('span', { class: 'lb-empty__icon', 'aria-hidden': 'true' }, icon('trophy')),
+        h('p', { class: 'lb-empty__title' }, scope === 'month' ? t('lb.empty') : t('lb.zeroPeriod')),
+        h('p', { class: 'lb-empty__text' }, t('lb.emptyText'))));
     }
     const x = (r) => (me.role === 'owner' && scope === 'month' && extra ? extra[r.full_name_en] : null);
     add(body,
-      h('div', { class: 'lb-head' }, h('h2', { class: 'section__title' }, t('lb.leaders')), h('span', { class: 'text-xs text-muted' }, t('lb.updated', { time: formatTime(new Date()) }))),
       h('ol', { class: 'leaderboard', role: 'list' }, rows.map((r) => {
         const top = r.rank === 1 && r.green > 0;
         const ex = x(r);
         return h('li', { class: ['lb-row', r.is_me && 'lb-row--me', top && 'lb-row--top'] },
-          h('span', { class: 'lb-avatar', 'aria-hidden': 'true' }, initial(r), r.is_me ? h('span', { class: 'lb-avatar__badge' }, icon('check')) : null),
+          h('span', { class: 'lb-rank num', 'aria-label': `${t('lb.rank')} ${r.rank}` },
+            top ? h('span', { class: 'lb-rank__crown', 'aria-hidden': 'true' }, '👑') : null, String(r.rank)),
           h('div', { class: 'lb-main' },
             h('div', { class: 'lb-name-row' },
               h('span', { class: 'lb-name' }, name(r)), r.is_me ? chip(t('lb.me'), { tone: 'accent' }) : null,
               ex ? h('span', { class: 'cluster cluster--sm' }, badge(String(ex.red), { tone: 'point-red', dot: true }), badge(String(ex.black), { tone: 'point-black', dot: true })) : null),
             job(r) ? h('span', { class: 'text-xs text-muted' }, job(r)) : null,
-            h('span', { class: 'lb-points' }, h('span', { class: 'chip__dot', 'aria-hidden': 'true' }), `${r.green} ${t('points.green')}`),
-            scope === 'all' ? null : progress({ label: t('lb.monthly'), value: Math.min(r.green, r.threshold), max: r.threshold, reward: true, valueText: `${r.green}/${r.threshold}` })),
-          h('span', { class: 'lb-rank num', 'aria-label': `${t('lb.rank')} ${r.rank}` }, top ? icon('trophy') : String(r.rank)));
-      })),
-      h('p', { class: 'tip-row' }, icon('info'), h('span', { class: 'tip-row__text' }, t('lb.footer'))));
+            h('div', { class: 'lb-score' },
+              h('span', { class: 'lb-points' }, h('b', { class: 'num' }, String(r.green)), ` ${t('points.green')}`),
+              scope === 'all' ? null : h('span', { class: 'lb-of num' }, `${Math.min(r.green, r.threshold)}/${r.threshold}`)),
+            scope === 'all' ? null : progress({ label: t('lb.monthly'), value: Math.min(r.green, r.threshold), max: r.threshold, reward: true, valueText: `${r.green}/${r.threshold}` })));
+      })));
   }
   load();
 }

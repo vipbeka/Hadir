@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Zintra حاضر",
-  "short_name": "Zintra حاضر",
-  "description": "الحضور والنقاط والمكافآت لفريق زينترا — Attendance, points and rewards for the Zintra team",
+  "name": "حاضر",
+  "short_name": "حاضر",
+  "description": "الحضور والنقاط والمكافآت لفريق العمل — Attendance, points and rewards for the team",
   "lang": "ar",
   "dir": "auto",
   "start_url": "./index.html",

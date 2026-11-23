@@ -42,6 +42,7 @@ for (const s of surfaces) {
   pairs.push(['--color-border-strong', s, UI, 'form control boundary']);
 }
 pairs.push(
+  ['--color-on-hero', '--color-hero-end', TEXT, 'hero text on the teal end'], ['--color-on-hero-muted', '--color-hero-end', TEXT, 'hero subtitle'],
   ['--color-text-on-primary', '--color-cta', TEXT, 'CTA button'], ['--color-text-on-primary', '--color-cta-hover', TEXT], ['--color-text-on-primary', '--color-cta-pressed', TEXT],
   ['--color-text-on-primary', '--color-primary', TEXT], ['--color-text-on-primary', '--color-primary-hover', TEXT], ['--color-text-on-primary', '--color-primary-pressed', TEXT],
   ['--color-surface', '--color-danger', TEXT, 'danger button label'], ['--color-surface', '--color-danger-hover', TEXT],

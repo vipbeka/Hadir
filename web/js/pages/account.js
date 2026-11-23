@@ -27,7 +27,7 @@ export function renderAccount(main, { me, onSignOut }) {
   const signOut = button({ label: t('common.signOut'), variant: 'secondary', icon: 'logOut', onClick: onSignOut });
   signOut.querySelector('.icon')?.classList.add('icon--flip');
 
-  add(main, pageHeader({ title: t('account.title'), subtitle: t('account.subtitle') }),
+  add(main, pageHeader({ iconName: 'user', title: t('account.title'), subtitle: t('account.subtitle') }),
     card({ title: displayName(me), body: dl }));
 
   if (me.role === 'staff') {

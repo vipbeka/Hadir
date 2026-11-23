@@ -10,15 +10,13 @@ import { wordmark } from '../ui/brand.js';
 import { langSwitcher, themeToggle } from '../ui/prefs.js';
 import { installButton } from '../ui/install.js';
 
-const BOTTOM_MAX = 4; // first 4 items in the bottom bar; the rest go to "More"
-
-function navLink(item, currentPath, cls) {
+function navLink(item, currentPath, cls, { labelKey, iconName } = {}) {
   const active = currentPath.split('?')[0] === item.path;
   return h('a', {
     class: cls,
     href: `#${item.path}`,
     'aria-current': active ? 'page' : null,
-  }, icon(item.icon), h('span', {}, t(item.labelKey)),
+  }, h('span', { class: `${cls}-icon` }, icon(iconName || item.icon)), h('span', {}, t(labelKey || item.labelKey)),
   item.count ? h('span', { class: 'badge badge--accent nav__count num' }, String(item.count)) : null);
 }
 
@@ -27,12 +25,16 @@ function initials(name = '') {
 }
 
 /**
- * renderShell(root, { nav: [{ path, labelKey, icon }], currentPath, user: { name, roleKey }, onSignOut })
- * returns { main } — the element pages render into.
+ * renderShell(root, { nav: [{ path, labelKey, icon, bottom }], currentPath, user: { name, roleKey }, onSignOut })
+ * One layout on every screen size (as in the reference design): a slim
+ * top bar (logo + «حاضر», hamburger), a centred content column and a
+ * floating bottom tab bar. The hamburger opens a side panel listing every
+ * screen. Returns { main } — the element pages render into.
  */
-export function renderShell(root, { nav, currentPath, user, onSignOut }) {
+export function renderShell(root, { nav, currentPath, user, onSignOut, role }) {
   clear(root);
   document.body.classList.add('has-bottombar');
+  document.body.dataset.role = role || (nav[0].path.startsWith('/owner') ? 'owner' : 'staff');
 
   const userChip = user ? h('div', { class: 'user-chip' },
     h('span', { class: 'avatar', 'aria-hidden': 'true' }, initials(user.name)),
@@ -40,29 +42,18 @@ export function renderShell(root, { nav, currentPath, user, onSignOut }) {
       h('p', { class: 'user-chip__name' }, user.name),
       h('p', { class: 'user-chip__role' }, t(user.roleKey)))) : null;
 
-  const signOut = button({ label: t('common.signOut'), variant: 'ghost', icon: 'logOut', block: true, onClick: onSignOut });
-  signOut.querySelector('.icon')?.classList.add('icon--flip');
-
-  const sidebar = h('aside', { class: 'sidebar', 'aria-label': t('nav.primary') },
-    h('div', { class: 'sidebar__brand' }, wordmark({ href: `#${nav[0].path}` })),
-    h('nav', { class: 'nav', 'aria-label': t('nav.primary') }, nav.map((i) => navLink(i, currentPath, 'nav__link'))),
-    h('div', { class: 'sidebar__footer' },
-      h('div', { class: 'sidebar__prefs' }, langSwitcher(), themeToggle({ compact: true })),
-      installButton({ variant: 'ghost', block: true }),
-      userChip, signOut));
-
-  // ----- mobile drawer ("More") -----
-  const overflow = nav.slice(BOTTOM_MAX - (nav.length > BOTTOM_MAX ? 1 : 0));
+  // ----- side panel (hamburger): every screen + preferences -----
   const drawerSignOut = button({ label: t('common.signOut'), variant: 'secondary', icon: 'logOut', block: true, onClick: onSignOut });
+  drawerSignOut.querySelector('.icon')?.classList.add('icon--flip');
   const drawer = h('dialog', { class: 'drawer', 'aria-label': t('common.menu') },
     h('div', { class: 'drawer__header' }, wordmark(),
       button({ label: t('common.close'), variant: 'ghost', icon: 'x', iconOnly: true, onClick: () => closeDrawer() })),
     h('div', { class: 'drawer__body' },
-      nav.length > BOTTOM_MAX ? h('nav', { class: 'nav', 'aria-label': t('common.more') }, overflow.map((i) => navLink(i, currentPath, 'nav__link'))) : null,
+      userChip,
+      h('nav', { class: 'nav', 'aria-label': t('nav.primary') }, nav.map((i) => navLink(i, currentPath, 'nav__link'))),
       h('div', { class: 'drawer__group' }, h('span', { class: 'drawer__label' }, t('lang.label')), langSwitcher()),
       h('div', { class: 'drawer__group' }, h('span', { class: 'drawer__label' }, t('theme.label')), themeToggle()),
       installButton({ variant: 'primary', block: true }),
-      userChip ? userChip.cloneNode(true) : null,
       drawerSignOut));
   drawer.addEventListener('click', (e) => { if (e.target === drawer || e.target.closest('a')) closeDrawer(); });
   drawer.addEventListener('cancel', (e) => { e.preventDefault(); closeDrawer(); });
@@ -76,48 +67,57 @@ export function renderShell(root, { nav, currentPath, user, onSignOut }) {
     if (dur > 0) { drawer.addEventListener('animationend', done, { once: true }); setTimeout(done, dur + 120); } else done();
   }
 
-  const current = nav.find((i) => i.path === currentPath.split('?')[0]);
-  const accountItem = nav.find((i) => i.path.endsWith('/account'));
+  // ----- top bar: logo + «حاضر» at the start, connection state, hamburger at the end -----
+  const online = h('span', { class: 'conn', role: 'status' });
+  const setOnline = () => {
+    const on = navigator.onLine !== false;
+    online.classList.toggle('conn--off', !on);
+    online.replaceChildren(h('span', { class: 'conn__dot', 'aria-hidden': 'true' }), t(on ? 'shell.online' : 'shell.offline'));
+  };
+  setOnline();
+  window.addEventListener('online', setOnline);
+  window.addEventListener('offline', setOnline);
   const topbar = h('header', { class: 'topbar' },
-    h('div', { class: 'topbar__start' },
-      button({ label: t('common.menu'), variant: 'ghost', icon: 'menu', iconOnly: true, onClick: openDrawer }),
+    h('div', { class: 'topbar__inner' },
       wordmark({ href: `#${nav[0].path}` }),
-      current ? h('span', { class: 'topbar__title' }, t(current.labelKey)) : null),
-    accountItem ? h('a', { class: 'topbar__avatar', href: `#${accountItem.path}`, 'aria-label': t(accountItem.labelKey),
-      'aria-current': current === accountItem ? 'page' : null }, icon('user')) : null);
+      online,
+      button({ label: t('common.menu'), variant: 'secondary', icon: 'menu', iconOnly: true, attrs: { class: 'topbar__menu' }, onClick: openDrawer })));
 
-  // ----- bottom bar -----
-  const bottomItems = nav.length > BOTTOM_MAX ? nav.slice(0, BOTTOM_MAX - 1) : nav;
-  const overflowActive = nav.length > BOTTOM_MAX && overflow.some((i) => i.path === currentPath);
+  // ----- floating bottom bar (4 tabs; «المزيد» opens the panel if no 4th tab) -----
+  const bottomItems = nav.filter((i) => i.bottom).slice(0, 4);
+  const bottomPaths = new Set(bottomItems.map((i) => i.path));
+  const here = currentPath.split('?')[0];
   const bottombar = h('nav', { class: 'bottombar', 'aria-label': t('nav.primary') },
-    bottomItems.map((i) => navLink(i, currentPath, 'bottombar__link')),
-    nav.length > BOTTOM_MAX ? h('button', {
-      type: 'button', class: 'bottombar__link', onClick: openDrawer,
-      'aria-current': overflowActive ? 'page' : null, 'aria-haspopup': 'dialog',
-    }, icon('moreHorizontal'), h('span', {}, t('common.more'))) : null);
+    h('div', { class: 'bottombar__inner' },
+      bottomItems.map((i) => navLink(i, currentPath, 'bottombar__link', { labelKey: i.bottomLabelKey, iconName: i.bottomIcon })),
+      bottomItems.length < 4 ? h('button', {
+        type: 'button', class: 'bottombar__link', onClick: openDrawer,
+        'aria-current': !bottomPaths.has(here) ? 'page' : null, 'aria-haspopup': 'dialog',
+      }, h('span', { class: 'bottombar__link-icon' }, icon('moreHorizontal')), h('span', {}, t('common.more'))) : null));
 
   const main = h('main', { class: 'main__inner', id: 'main', tabindex: '-1' });
 
   root.append(
     h('a', { class: 'skip-link', href: '#main', onClick: (e) => { e.preventDefault(); main.focus(); } }, t('common.skipToContent')),
-    h('div', { class: 'app' }, sidebar, topbar, h('div', { class: 'main' }, main), bottombar),
+    h('div', { class: 'app' }, topbar, h('div', { class: 'main' }, main), bottombar),
     drawer,
   );
   return { main };
 }
 
 /**
- * pageHeader({ eyebrow, chips, title, subtitle, actions, aside })
- * `chips` (nodes) sit above the title; `aside` is a small block at the
- * inline end (e.g. a balance or greeting).
+ * pageHeader({ eyebrow, chips, title, subtitle, actions, aside, iconName })
+ * Gradient hero card. `chips` sit above the title; `aside` (or a frosted
+ * `iconName` circle) sits at the inline end; `actions` wrap below.
  */
-export function pageHeader({ eyebrow, chips, title, subtitle, actions, aside }) {
-  return h('header', { class: ['page-header', aside && 'page-header--aside'] },
+export function pageHeader({ eyebrow, chips, title, subtitle, actions, aside, iconName }) {
+  const side = aside || (iconName ? h('span', { class: 'page-header__icon', 'aria-hidden': 'true' }, icon(iconName)) : null);
+  return h('header', { class: ['page-header', actions && 'page-header--wrap'] },
     h('div', { class: 'page-header__main' },
       chips ? h('div', { class: 'page-header__chips' }, chips) : null,
       eyebrow ? h('p', { class: 'page-header__eyebrow' }, eyebrow) : null,
       h('h1', { class: 'page-header__title' }, title),
       subtitle ? h('p', { class: 'page-header__subtitle' }, subtitle) : null),
-    aside ? h('div', { class: 'page-header__aside' }, aside) : null,
+    side ? h('div', { class: 'page-header__aside' }, side) : null,
     actions ? h('div', { class: 'page-header__actions' }, actions) : null);
 }

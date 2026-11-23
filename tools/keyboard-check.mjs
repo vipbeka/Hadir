@@ -64,9 +64,10 @@ for (const lang of ['ar', 'en']) {
   check(sw[0]?.tag === 'a' && /content|المحتوى/i.test(sw[0].text), `[${lang}] skip link is first tab stop`);
   check(sw.filter((w) => !w.visibleRing).length === 0, `[${lang}] shell: every focused control shows a focus ring (${sw.length} stops)`);
   await page.keyboard.press('Shift+Tab');
-  await page.evaluate(() => document.querySelector('.nav__link[href="#/owner/settings"]').focus());
+  await page.click('.topbar__menu'); await page.waitForSelector('.drawer[open]');
+  await page.evaluate(() => document.querySelector('.drawer .nav__link[href="#/owner/settings"]').focus());
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => location.hash === '#/owner/settings');
+  await page.waitForFunction(() => location.hash === '#/owner/settings'); await page.waitForTimeout(400);
   check(await page.evaluate(() => document.querySelector('.nav__link[aria-current="page"]')?.getAttribute('href') === '#/owner/settings'), `[${lang}] nav via keyboard sets aria-current`);
   await ctx.close();
 
@@ -78,7 +79,7 @@ for (const lang of ['ar', 'en']) {
   await uiLogin(page, base, '87654321');
   await page.waitForFunction(() => location.hash === '#/owner/dashboard');
   await page.waitForTimeout(200);
-  await page.focus('.topbar .btn');
+  await page.focus('.topbar__menu');
   await page.keyboard.press('Enter');
   check(await page.evaluate(() => document.querySelector('.drawer').open), `[${lang}] mobile drawer opens from keyboard`);
   check(await page.evaluate(() => document.querySelector('.drawer').contains(document.activeElement)), `[${lang}] focus moves into the drawer`);

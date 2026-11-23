@@ -9,7 +9,7 @@ import { t } from '../core/i18n.js';
 const MARK_SRC = new URL('../../assets/brand/logo-mark.png', import.meta.url).href;
 
 export function brandName(attrs = {}) {
-  return h('bdi', { dir: 'ltr', ...attrs }, t('app.name'));
+  return h('span', { ...attrs }, t('app.name'));
 }
 
 /** wordmark({ href, size }) — header/sidebar lockup */
@@ -21,7 +21,7 @@ export function wordmark({ href = null, tag } = {}) {
 
 /** Large logo for the login screen; meaningful alt text (company name). */
 export function logoLarge() {
-  return h('img', { class: 'auth__logo', src: MARK_SRC, alt: `${t('company.name')} — ${t('company.nameLatin')}`, width: '88', height: '85' });
+  return h('img', { class: 'auth__logo', src: MARK_SRC, alt: t('app.name'), width: '88', height: '85' });
 }
 
 export { MARK_SRC };

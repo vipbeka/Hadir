@@ -21,7 +21,7 @@ export async function renderApprovals(main) {
   setDocumentTitle(t('ap.title'));
   const fromHash = location.hash.split('?')[1];
   let tab = TABS.includes(fromHash) ? fromHash : store.get('zh.apTab', 'black');
-  add(main, pageHeader({ title: t('ap.title') }));
+  add(main, pageHeader({ iconName: 'checkCircle', title: t('ap.title') }));
   const tabs = h('div', { class: 'segmented tabs', role: 'tablist', 'aria-label': t('ap.title') });
   const body = h('div', { class: 'stack', role: 'tabpanel' });
   add(main, tabs, body);

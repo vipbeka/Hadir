@@ -16,7 +16,7 @@ const tone = (s) => ({ pending: 'warning', approved: 'success', rejected: 'dange
 
 export async function renderStaffRequests(main, { me }) {
   setDocumentTitle(t('req.title'));
-  add(main, pageHeader({ title: t('req.title'), actions: [button({ label: t('req.newLeave'), variant: 'primary', icon: 'plus', onClick: openLeave })] }));
+  add(main, pageHeader({ iconName: 'inbox', title: t('req.title'), actions: [button({ label: t('req.newLeave'), variant: 'primary', icon: 'plus', onClick: openLeave })] }));
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, body);
 

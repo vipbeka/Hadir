@@ -12,7 +12,7 @@ import { navigate } from '../../core/router.js';
 
 export async function renderOwnerDashboard(main, { me }) {
   setDocumentTitle(t('od.title'));
-  add(main, pageHeader({ eyebrow: t('shell.welcome', { name: displayName(me) }), title: t('od.title'),
+  add(main, pageHeader({ iconName: 'grid', eyebrow: t('shell.welcome', { name: displayName(me) }), title: t('od.title'),
     actions: [button({ label: t('common.refresh'), icon: 'clock', onClick: () => load() })] }), installBanner());
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, body);

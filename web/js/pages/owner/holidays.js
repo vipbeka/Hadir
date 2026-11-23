@@ -14,7 +14,7 @@ import { toast } from '../../ui/toast.js';
 
 export async function renderHolidays(main) {
   setDocumentTitle(t('hol.title'));
-  add(main, pageHeader({ title: t('hol.title'), subtitle: t('hol.subtitle'), actions: [button({ label: t('hol.add'), variant: 'primary', icon: 'plus', onClick: () => edit(null) })] }));
+  add(main, pageHeader({ iconName: 'calendar', title: t('hol.title'), subtitle: t('hol.subtitle'), actions: [button({ label: t('hol.add'), variant: 'primary', icon: 'plus', onClick: () => edit(null) })] }));
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, body);
 

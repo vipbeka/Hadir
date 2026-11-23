@@ -30,7 +30,7 @@ export function renderEmployees(main, { me }) {
   search.querySelector('input').addEventListener('input', (e) => { query = e.target.value.trim().toLowerCase(); renderList(); });
 
   add(main, 
-    pageHeader({ title: t('emp.title'), subtitle: t('emp.subtitle'),
+    pageHeader({ iconName: 'users', title: t('emp.title'), subtitle: t('emp.subtitle'),
       actions: [button({ label: t('emp.add'), variant: 'primary', icon: 'plus', onClick: openAdd })] }),
     h('div', { class: 'toolbar' }, search),
     listHost);

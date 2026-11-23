@@ -16,7 +16,7 @@ import { icon } from '../../ui/icons.js';
 
 export async function renderSettings(main) {
   setDocumentTitle(t('set.title'));
-  add(main, pageHeader({ title: t('set.title'), subtitle: t('set.subtitle') }));
+  add(main, pageHeader({ iconName: 'settings', title: t('set.title'), subtitle: t('set.subtitle') }));
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, body);
   let s; let rules; let windows;

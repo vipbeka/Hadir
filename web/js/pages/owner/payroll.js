@@ -40,7 +40,7 @@ export async function renderPayroll(main) {
   const exportBtns = [pdf, xls, csv];
   exportBtns.forEach((b) => { b.disabled = true; });
   const status = h('p', { class: 'text-sm text-muted', role: 'status', 'aria-live': 'polite' });
-  add(main, pageHeader({ title: t('pr.title'), subtitle: t('pr.subtitle') }),
+  add(main, pageHeader({ iconName: 'fileText', title: t('pr.title'), subtitle: t('pr.subtitle') }),
     h('div', { class: 'toolbar no-print' }, fMonth, h('div', { class: 'cluster cluster--sm' }, gen, pdf, xls), h('div', { class: 'cluster cluster--sm' }, fCsv, csv)),
     status);
   const body = h('div', { class: 'stack' }, emptyState({ iconName: 'fileText', title: t('pr.empty') }));
@@ -89,7 +89,7 @@ export async function renderPayroll(main) {
     fill(body);
     add(body, h('header', { class: 'print-header' },
       h('img', { src: MARK_SRC, alt: '', width: '48', height: '46' }),
-      h('div', {}, h('strong', {}, h('bdi', { dir: 'ltr' }, t('app.name')), ' — ', t('company.name'), ' / ', h('bdi', { dir: 'ltr' }, 'Zintra')),
+      h('div', {}, h('strong', {}, t('app.name')),
         h('p', { class: 'text-sm text-muted' }, `${t('pr.title')} · ${monthLabel(rep.month)}`))));
     add(body, h('p', { class: 'text-sm text-muted' }, t('pr.meta', { month: monthLabel(rep.month), tz: rep.timezone, rv: rep.rule_version, at: formatDateTime(rep.generated_at) })),
       alert(t('pr.netNote'), { tone: 'info' }));

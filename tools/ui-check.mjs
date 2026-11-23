@@ -113,7 +113,7 @@ for (const [name, url, code] of pages) {
         if (info.theme !== theme) problems.push(`theme=${info.theme}`);
         if (info.leak) problems.push(`raw value shown to the user: "${info.leak}"`);
         if (info.overflowX) problems.push(`horizontal overflow: ${info.offenders.join(' | ')}`);
-        if (!info.title.includes('Zintra حاضر')) problems.push(`title missing product name: ${info.title}`);
+        if (!info.title.includes('حاضر') || /Zintra/.test(info.title)) problems.push(`title missing product name: ${info.title}`);
         if (info.small.length && name !== 'design') problems.push(`touch targets < 44px: ${info.small.join(' | ')}`);
         if (info.clipped.length) problems.push(`clipped text: ${info.clipped.join(' | ')}`);
         if (info.dialog && !(info.dialog.fits && info.dialog.close && info.dialog.scrolls)) problems.push(`dialog: ${JSON.stringify(info.dialog)}`);

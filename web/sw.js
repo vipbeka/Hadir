@@ -9,7 +9,7 @@
  * - Web Push handlers are added in Step 5 (shift reminders).
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'zh-v5';
+const VERSION = 'zh-v6';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const PRECACHE = [
@@ -57,7 +57,7 @@ self.addEventListener('message', (event) => {
 self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data ? event.data.text() : '' }; }
-  const title = data.title || 'Zintra حاضر';
+  const title = (data.title || 'حاضر').replace(/^Zintra\s+/, '');
   event.waitUntil(self.registration.showNotification(title, {
     body: data.body || '',
     lang: data.lang || 'ar',

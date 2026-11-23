@@ -102,7 +102,7 @@ export async function xlsxBlob(rep, raw, onProgress) {
   onProgress?.(10);
   const XLSX = await loadScript(`${VENDOR}xlsx-0.18.5/xlsx.full.min.js`, 'XLSX');
   const ar = getLang() === 'ar';
-  const meta = [[`${t('app.name')} — ${t('company.name')} / Zintra`],
+  const meta = [[t('app.name')],
     [t('pr.meta', { month: monthLabel(rep.month), tz: rep.timezone, rv: rep.rule_version, at: `${formatDate(rep.generated_at)} ${formatTime(rep.generated_at)}` })],
     [t('pr.netNote')], []];
   const wb = XLSX.utils.book_new();
@@ -168,7 +168,7 @@ export async function pdfBlob(rep, onProgress) {
   doc.addFileToVFS('Plex-Regular.ttf', reg); doc.addFont('Plex-Regular.ttf', 'Plex', 'normal');
   doc.addFileToVFS('Plex-Bold.ttf', bold); doc.addFont('Plex-Bold.ttf', 'Plex', 'bold');
   doc.setLanguage(ar ? 'ar' : 'en-US');
-  doc.setProperties({ title: `Zintra حاضر — ${t('pr.title')} ${rep.month.slice(0, 7)}`, creator: 'Zintra حاضر' });
+  doc.setProperties({ title: `حاضر — ${t('pr.title')} ${rep.month.slice(0, 7)}`, creator: 'حاضر' });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40, BOTTOM = H - 50;
   // In Arabic: labels at the right edge, values at the left edge; English mirrors it.
   const startX = ar ? W - M : M, endX = ar ? M : W - M;
@@ -191,12 +191,8 @@ export async function pdfBlob(rep, onProgress) {
     const tx = ar ? W - M - 44 : M + 44;
     text(t('pr.title'), tx, y + 12, { align: alignStart });
     doc.setFont('Plex', 'normal'); doc.setFontSize(10); doc.setTextColor(...muted);
-    // brand + company drawn as separate runs so mixed-script lines keep their order
-    text(ar ? 'زينترا' : 'Zintra', tx, y + 28, { align: alignStart });
-    // product name as two single-script runs (Latin then Arabic, visual order "Zintra حاضر")
-    const wZ = doc.getTextWidth('Zintra '), wH = doc.getTextWidth('حاضر');
-    const x0 = ar ? M : W - M - wZ - wH;
-    plainText('Zintra', x0, y + 12); plainText('حاضر', x0 + wZ, y + 12);
+    // product name (Arabic only)
+    text(t('app.name'), ar ? M : W - M, y + 12, { align: alignEnd });
     text(monthLabel(rep.month), ar ? M : W - M, y + 28, { align: alignEnd });
     y += 48;
     doc.setDrawColor(...brand); doc.setLineWidth(1.2); doc.line(M, y, W - M, y); y += 16;

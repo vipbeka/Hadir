@@ -108,7 +108,7 @@
   --color-on-brand-dark-muted: #A9B7D6;
 
   /* ---------- Semantic surfaces & text (light) ---------- */
-  --color-bg: #F2F4FA;                 /* page background (soft lavender-grey) */
+  --color-bg: #EEF3F8;                 /* page background (pale blue-grey) */
   --color-surface: #FFFFFF;            /* cards, dialogs, tables */
   --color-surface-sunken: #EBF0F8;     /* wells, table header, skeleton base */
   --color-surface-raised: #FFFFFF;     /* popovers, toasts */
@@ -136,7 +136,16 @@
   --color-cta: #0B1D44;
   --color-cta-hover: #132C63;
   --color-cta-pressed: #071533;
-  --gradient-cta: linear-gradient(90deg, #0B1D44 0%, #10306F 100%);
+  --gradient-cta: linear-gradient(to left, #1B4A9B 0%, #1F6AA9 55%, #1B7489 100%);
+  /* Hero / header cards: deep blue (top inline-start) → teal (bottom inline-end).
+     The teal end stays dark enough for white text (≥4.5:1). */
+  --gradient-hero: linear-gradient(to bottom left, #1B4A9B 0%, #2160AC 45%, #1B7489 100%);
+  --color-hero-end: #1B7489;
+  --color-on-hero: #FFFFFF;
+  --color-on-hero-muted: #F2F7FD;
+  --color-hero-glass: rgb(255 255 255 / 0.14);
+  --color-hero-glass-border: rgb(255 255 255 / 0.24);
+  --color-hero-accent: #8FF0E6;          /* highlighted words on the hero */
   --color-cta-disabled: #DCE5F6;
   --color-cta-disabled-text: #55658A;
   --color-link-hover: var(--brand-blue-pressed);
@@ -204,6 +213,7 @@
   --font-size-3xl: 1.875rem;  /* 30 */
   --font-size-4xl: 2.25rem;   /* 36 */
   --font-size-5xl: 3rem;      /* 48 */
+  --font-size-watermark: 9rem; /* decorative hero letter */
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
@@ -250,12 +260,16 @@
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
-  --radius-xl: 24px;
+  --radius-xl: 22px;
+  --radius-2xl: 28px;
   --radius-pill: 999px;
 
   /* ---------- Shadows (navy-tinted) ---------- */
   --shadow-xs: 0 1px 2px rgb(1 27 90 / 0.08);
-  --shadow-sm: 0 1px 2px rgb(1 27 90 / 0.04), 0 6px 18px rgb(1 27 90 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(15 40 90 / 0.04), 0 8px 24px rgb(15 40 90 / 0.06);
+  --shadow-hero: 0 14px 30px rgb(27 74 155 / 0.28);
+  --shadow-float: 0 10px 30px rgb(15 40 90 / 0.14);
+  --shadow-cta: 0 8px 18px rgb(27 74 155 / 0.25);
   --shadow-md: 0 8px 24px rgb(1 27 90 / 0.09), 0 2px 6px rgb(1 27 90 / 0.05);
   --shadow-lg: 0 16px 40px rgb(1 27 90 / 0.16), 0 4px 12px rgb(1 27 90 / 0.08);
   --shadow-reward: 0 6px 20px rgb(185 125 37 / 0.28);
@@ -303,7 +317,12 @@
   --color-cta: #2B6FE0;
   --color-cta-hover: #2563D6;
   --color-cta-pressed: #1F5FC7;
-  --gradient-cta: linear-gradient(90deg, #1F5FC7 0%, #2B6FE0 100%);
+  --gradient-cta: linear-gradient(to left, #1F4FA8 0%, #1E6C9E 100%);
+  --gradient-hero: linear-gradient(to bottom left, #173E86 0%, #1C5596 50%, #176A7D 100%);
+  --color-hero-end: #176A7D;
+  --shadow-hero: 0 14px 30px rgb(0 0 0 / 0.45);
+  --shadow-float: 0 10px 30px rgb(0 0 0 / 0.5);
+  --shadow-cta: 0 8px 18px rgb(0 0 0 / 0.4);
   --color-cta-disabled: #13285A;
   --color-cta-disabled-text: #93A3C6;
   --color-border-strong: #5B6E96;

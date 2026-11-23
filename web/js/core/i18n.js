@@ -56,7 +56,7 @@ export function formatNumber(n, opts = {}) {
  * mixed Latin/Arabic name keeps its visual order inside RTL titles.
  */
 export function setDocumentTitle(pageTitle) {
-  const name = `⁦${t('app.name')}⁩`;
+  const name = t('app.name');
   document.title = pageTitle ? `${pageTitle} · ${name}` : name;
 }
 

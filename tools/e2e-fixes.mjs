@@ -170,27 +170,34 @@ for (const lang of ['ar', 'en']) {
   await ctx.close();
 }
 
-// ---------------------------------------------------------------- 11. progress bar values
+// ---------------------------------------------------------------- 11. progress values (Home bar + Points ring)
 for (const g of [0, 1, 29, 30, 31]) {
   const { ctx, page } = await staffPage({ state: { green: g } });
-  await page.goto(`${base}/index.html#/staff/points`); await page.waitForSelector('.progress--reward'); await page.waitForTimeout(900);
-  const r = await page.evaluate(() => {
-    const tr = document.querySelector('.progress--reward .progress__track'); const f = tr.querySelector('.progress__fill');
-    return { var: tr.style.getPropertyValue('--progress'), fill: f.getBoundingClientRect().width, track: tr.getBoundingClientRect().width,
-      after: getComputedStyle(tr, '::after').content };
+  await page.waitForSelector('.month-card .progress--reward'); await page.waitForTimeout(900);
+  const bar = await page.evaluate(() => {
+    const tr = document.querySelector('.month-card .progress__track'); const f = tr.querySelector('.progress__fill');
+    return { fill: f.getBoundingClientRect().width, track: tr.getBoundingClientRect().width, after: getComputedStyle(tr, '::after').content };
   });
   const expect = Math.min(g, 30) / 30;
-  const ok = g === 0 ? r.fill === 0 : Math.abs(r.fill / r.track - expect) < 0.02;
-  check(ok && (r.after === 'none' || r.after === 'normal'), `progress ${g}/30 → fill ${(r.fill / r.track * 100).toFixed(1)}% (var ${r.var}), no extra marker`);
+  const barOk = g === 0 ? bar.fill === 0 : Math.abs(bar.fill / bar.track - expect) < 0.02;
+  check(barOk && (bar.after === 'none' || bar.after === 'normal'), `home bar ${g}/30 → ${(bar.fill / bar.track * 100).toFixed(1)}%, no extra marker`);
+  await page.goto(`${base}/index.html#/staff/points`); await page.waitForSelector('.ring');
+  const ring = await page.evaluate(() => {
+    const f = document.querySelector('.ring__fill'); const r = document.querySelector('.ring');
+    return { has: !!f, dash: f ? Number(f.getAttribute('stroke-dasharray').split(' ')[0]) : 0, now: r.getAttribute('aria-valuenow'), text: r.textContent };
+  });
+  const C = 2 * Math.PI * 42;
+  const ringOk = g === 0 ? !ring.has : Math.abs(ring.dash / C - expect) < 0.01;
+  check(ringOk && ring.text.includes(`${g}/30`) && Number(ring.now) === Math.min(g, 30), `points ring ${g}/30 → ${g === 0 ? 'empty' : `${(ring.dash / C * 100).toFixed(1)}%`}`);
   await ctx.close();
 }
 
 // ---------------------------------------------------------------- 6. leaderboard
 {
   const cases = [
-    ['empty', [], (t) => /turned off/i.test(t) && !/No green points recorded/.test(t)],
-    ['zeros', [{ rank: 1, full_name_ar: 'أ', full_name_en: 'Ahmed', green: 0, threshold: 30, is_me: true }, { rank: 2, full_name_ar: 'ب', full_name_en: 'Badr', green: 0, threshold: 30, is_me: false }], (t) => /No green points recorded this month yet/.test(t) && /Ahmed/.test(t)],
-    ['points', [{ rank: 1, full_name_ar: 'أ', full_name_en: 'Ahmed', green: 5, threshold: 30, is_me: true }], (t) => !/No green points recorded/.test(t) && /Ahmed/.test(t)],
+    ['empty', [], (t) => /turned off/i.test(t) && !/No points yet this (month|period)/.test(t)],
+    ['zeros', [{ rank: 1, full_name_ar: 'أ', full_name_en: 'Ahmed', green: 0, threshold: 30, is_me: true }, { rank: 2, full_name_ar: 'ب', full_name_en: 'Badr', green: 0, threshold: 30, is_me: false }], (t) => /No points yet this (month|period)/.test(t) && /Ahmed/.test(t)],
+    ['points', [{ rank: 1, full_name_ar: 'أ', full_name_en: 'Ahmed', green: 5, threshold: 30, is_me: true }], (t) => !/No points yet this (month|period)/.test(t) && /Ahmed/.test(t)],
   ];
   for (const [name, rows, pred] of cases) {
     const { ctx, page } = await staffPage({ state: { leaderboard: rows } });
@@ -214,8 +221,8 @@ for (const g of [0, 1, 29, 30, 31]) {
 // ---------------------------------------------------------------- leaderboard tabs + home closing time
 {
   const { ctx, page, state } = await staffPage({ state: { closesAt: '11:00:00' } });
-  await page.waitForSelector('.today-box');
-  check(/until 11:00 AM|has ended \(11:00 AM\)/.test(await page.textContent('main')), 'home shows the real check-in closing time (11:00 AM)');
+  await page.waitForSelector('.status-card');
+  check(/11:00 AM/.test(await page.textContent('.status-card')) || /until 11:00 AM|has ended \(11:00 AM\)/.test(await page.textContent('main')), 'home shows the real check-in closing time (11:00 AM)');
   await page.goto(`${base}/index.html#/staff/leaderboard`); await page.waitForSelector('.tabs__btn');
   for (const [label, scope] of [['Last month', 'prev'], ['All time', 'all'], ['This month', 'month']]) {
     await page.click(`.tabs__btn:has-text("${label}")`); await page.waitForTimeout(500);
