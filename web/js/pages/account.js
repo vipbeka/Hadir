@@ -35,7 +35,7 @@ export function renderAccount(main, { me, onSignOut }) {
       try { await api('set_reminders', { enabled: e.target.checked, language: document.documentElement.lang }); toast({ title: t('set.saved'), tone: 'success' }); }
       catch (err) { e.target.checked = !e.target.checked; toast({ title: t('error.title'), text: errorMessage(err), tone: 'danger' }); }
     } });
-    add(main, card({ title: t('push.title'), body: [h('p', { class: 'text-sm text-muted' }, t('push.text')), pushCard(me, { dismissible: false }), sw] }));
+    add(main, card({ title: t('push.title'), body: [h('p', { class: 'text-sm text-muted' }, t('push.text')), pushCard(me, { dismissible: false, compact: true }), sw] }));
   }
 
   if (me.role === 'owner') {

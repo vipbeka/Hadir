@@ -4,7 +4,7 @@ import { h, clear, add, fill } from '../../core/dom.js';
 import { t, setDocumentTitle, getLang } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
 import { errorMessage } from '../../core/errors.js';
-import { formatDate, formatDateTime, formatEGP, hhmm } from '../../core/format.js';
+import { formatDate, formatDateTime, formatEGP, formatClock } from '../../core/format.js';
 import { pageHeader } from '../../shell/shell.js';
 import { card, badge, emptyState, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
@@ -102,7 +102,7 @@ export async function renderApprovals(main) {
         const rv = button({ label: t('common.reject'), size: 'sm', onClick: () => act(rv, 'decide_early_leave', { id: r.id, approve: false, revoke: true, channel: 'dashboard' }) });
         actions.push(rv);
       }
-      return row(`#${r.id} · ${nm(r)}`, [`${formatDate(r.work_date)} · ${hhmm(r.requested_leave_time)}`, r.reason, r.decision_channel ? `via ${r.decision_channel}` : null],
+      return row(`#${r.id} · ${nm(r)}`, [`${formatDate(r.work_date)} · ${formatClock(r.requested_leave_time)}`, r.reason, r.decision_channel ? `via ${r.decision_channel}` : null],
         badge(t(`status.${r.status}`), { tone: tone(r.status), dot: true }), actions);
     });
   }

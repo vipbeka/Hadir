@@ -9,7 +9,7 @@
  * - Web Push handlers are added in Step 5 (shift reminders).
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'zh-v2';
+const VERSION = 'zh-v3';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const PRECACHE = [
@@ -23,7 +23,7 @@ const PRECACHE = [
   './js/shell/nav.js', './js/shell/shell.js',
   './js/pages/account.js', './js/pages/login.js', './js/pages/placeholder.js', './js/pages/leaderboard.js',
   './js/pages/staff/home.js', './js/pages/staff/attendance.js', './js/pages/staff/points.js', './js/pages/staff/requests.js',
-  './js/pages/owner/employees.js', './js/pages/owner/dashboard.js', './js/pages/owner/approvals.js', './js/pages/owner/payroll.js',
+  './js/pages/owner/employees.js', './js/pages/owner/dashboard.js', './js/pages/owner/approvals.js', './js/pages/owner/payroll.js', './js/pages/owner/payroll-export.js',
   './js/pages/owner/holidays.js', './js/pages/owner/settings.js',
   './vendor/leaflet-1.9.4/leaflet.js', './vendor/leaflet-1.9.4/leaflet.css',
   './i18n/ar.json', './i18n/en.json',

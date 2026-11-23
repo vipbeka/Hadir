@@ -68,8 +68,9 @@ export function table({ caption, columns, rows, stack = true, captionHidden = fa
  * threshold marker and turns gold when complete.
  */
 export function progress({ label, value = 0, max = 100, valueText, reward = false, indeterminate = false, hint }) {
-  const pct = Math.max(0, Math.min(100, (value / max) * 100));
-  const complete = reward && value >= max;
+  const v = Number(value); const m = Number(max);
+  const pct = Number.isFinite(v) && Number.isFinite(m) && m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
+  const complete = reward && m > 0 && v >= m;
   return h('div', { class: ['progress', reward && 'progress--reward', complete && 'progress--complete', indeterminate && 'progress--indeterminate'] },
     h('div', { class: 'progress__head' },
       h('span', { class: 'progress__label' }, label),

@@ -27,6 +27,7 @@ import { renderHolidays } from './pages/owner/holidays.js';
 import { renderSettings } from './pages/owner/settings.js';
 import { displayName } from './core/format.js';
 import { toast } from './ui/toast.js';
+import { closeAllModals } from './ui/modal.js';
 import { initPwa } from './core/pwa.js';
 import { watchUpdates } from './ui/install.js';
 
@@ -53,7 +54,11 @@ const PAGES = {
 
 // Per-page cleanup (e.g. stop geolocation watching when leaving Attendance)
 let cleanups = [];
-const runCleanups = () => { cleanups.forEach((fn) => { try { fn(); } catch { /* ignore */ } }); cleanups = []; };
+const runCleanups = () => {
+  closeAllModals();
+  document.querySelectorAll('dialog.drawer[open]').forEach((d) => d.close());
+  cleanups.forEach((fn) => { try { fn(); } catch { /* ignore */ } }); cleanups = [];
+};
 const registerCleanup = (fn) => cleanups.push(fn);
 
 async function doSignOut(notice = 'login.signedOut') {

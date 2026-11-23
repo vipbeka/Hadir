@@ -70,9 +70,10 @@ export function renderShell(root, { nav, currentPath, user, onSignOut }) {
   function closeDrawer() {
     if (!drawer.open) return;
     drawer.classList.add('is-closing');
-    const done = () => { drawer.classList.remove('is-closing'); drawer.close(); };
-    const dur = parseFloat(getComputedStyle(drawer).animationDuration) || 0;
-    if (dur > 0) drawer.addEventListener('animationend', done, { once: true }); else done();
+    let finished = false;
+    const done = () => { if (finished) return; finished = true; drawer.classList.remove('is-closing'); if (drawer.open) drawer.close(); };
+    const dur = (parseFloat(getComputedStyle(drawer).animationDuration) || 0) * 1000;
+    if (dur > 0) { drawer.addEventListener('animationend', done, { once: true }); setTimeout(done, dur + 120); } else done();
   }
 
   const topbar = h('header', { class: 'topbar' },

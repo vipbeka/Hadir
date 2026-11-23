@@ -6,7 +6,7 @@ import { t, setDocumentTitle, getLang } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
 import { sb } from '../../core/supabase.js';
 import { errorMessage } from '../../core/errors.js';
-import { formatDateTime, hhmm } from '../../core/format.js';
+import { formatDateTime, formatClock, hhmm } from '../../core/format.js';
 import { pageHeader } from '../../shell/shell.js';
 import { card, alert, emptyState, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
@@ -169,7 +169,7 @@ export async function renderSettings(main) {
     const hasWin = windows.some((w) => w.day_of_week === dow && w.enabled);
     return h('details', { class: 'day-editor', open: dow === 0 ? true : null },
       h('summary', {}, h('strong', {}, t(`dow.${dow}`)), ' ',
-        h('span', { class: 'text-sm text-muted' }, rule.is_work_day ? windows.filter((w) => w.day_of_week === dow && w.enabled).map((w) => `${getLang() === 'ar' ? w.label_ar : w.label_en} ${hhmm(w.start_time)}–${hhmm(w.end_time)}`).join(' · ') : t('home.dayOff'))),
+        h('span', { class: 'text-sm text-muted' }, rule.is_work_day ? windows.filter((w) => w.day_of_week === dow && w.enabled).map((w) => `${getLang() === 'ar' ? w.label_ar : w.label_en} ${formatClock(w.start_time)}–${formatClock(w.end_time)}`).join(' · ') : t('home.dayOff'))),
       h('div', { class: 'stack' },
         h('div', { class: 'cluster' }, fWork, fCheck, fPts),
         rule.is_work_day && !hasWin ? alert(t('set.noWindows'), { tone: 'warning' }) : null,

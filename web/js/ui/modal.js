@@ -2,6 +2,11 @@ import { h } from '../core/dom.js';
 import { t } from '../core/i18n.js';
 import { button } from './button.js';
 
+// Every open dialog, so route changes can close them (a dialog must not
+// follow the user to another page).
+const OPEN = new Set();
+export function closeAllModals() { [...OPEN].forEach((m) => m.close('navigate')); }
+
 /**
  * Modal built on the native <dialog> element: focus is trapped and
  * restored by the browser, Escape closes it, the backdrop is themed.
@@ -24,25 +29,42 @@ export function modal({ title, body, actions = [], size = 'md', dismissible = tr
   el.addEventListener('cancel', (e) => { e.preventDefault(); if (dismissible) close('dismiss'); });
   el.addEventListener('click', (e) => { if (dismissible && e.target === el) close('dismiss'); });
 
+  let opener = null; let closing = false;
   function open() {
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.body.append(el);
     el.showModal();
+    OPEN.add(api);
     return new Promise((res) => { resolver = res; });
   }
   function close(reason = 'close') {
-    if (!el.open) return;
+    if (!el.open || closing) return;
+    closing = true;
     el.classList.add('is-closing');
+    let finished = false;
     const done = () => {
+      if (finished) return;
+      finished = true;
       el.classList.remove('is-closing');
-      el.close();
+      if (el.open) el.close();
       el.remove();
+      OPEN.delete(api);
+      closing = false;
+      // give focus back to the control that opened the dialog (if still on the page)
+      if (opener && opener.isConnected && reason !== 'navigate') { try { opener.focus({ preventScroll: true }); } catch { /* ignore */ } }
       onClose?.(reason);
       resolver?.(reason);
     };
-    const dur = parseFloat(getComputedStyle(el).animationDuration) || 0;
-    if (dur > 0) el.addEventListener('animationend', done, { once: true }); else done();
+    const dur = (parseFloat(getComputedStyle(el).animationDuration) || 0) * 1000;
+    if (dur > 0) {
+      el.addEventListener('animationend', done, { once: true });
+      // animationend never fires when animations are suppressed (hidden tab,
+      // OS "remove animations", element detached): never leave the dialog hanging
+      setTimeout(done, dur + 120);
+    } else done();
   }
-  return { el, open, close };
+  const api = { el, open, close };
+  return api;
 }
 
 /** confirmDialog({ title, text, confirmLabel, variant }) → Promise<boolean> */

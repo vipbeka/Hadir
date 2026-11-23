@@ -16,7 +16,7 @@
 .att-map .leaflet-tile-pane { filter: var(--map-tile-filter); }
 .att-map .leaflet-control-attribution { font-size: var(--font-size-xs); }
 .att-geo {
-  display: flex; align-items: center; gap: var(--space-2);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
@@ -25,6 +25,41 @@
 .att-geo--success { background: var(--color-success-subtle); color: var(--color-success); letter-spacing: var(--letter-spacing-caps); }
 .att-geo--warning { background: var(--color-warning-subtle); color: var(--color-warning); }
 .att-geo--danger { background: var(--color-danger-subtle); color: var(--color-danger); }
+.att-geo--neutral { color: var(--color-text-muted); }
+.att-geo__text { flex: 1 1 12rem; min-inline-size: 0; }
+.att-geo .spinner { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); }
+.att-map-wrap { position: relative; }
+.att-map-wrap[hidden] { display: none; }
+.att-map__msg {
+  position: absolute; inset: var(--space-3); z-index: var(--z-raised);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-3);
+  padding: var(--space-4); text-align: center;
+  background: var(--color-surface); border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+}
+.att-map__msg[hidden] { display: none; }
+/* office marker: a clear brand pin (not the default blue Leaflet pin).
+   Leaflet positions markers in physical map pixels (not page direction),
+   so this graphic uses physical left/top and fixed pixel geometry. */
+.map-pin { position: relative; }
+.map-pin::before { /* lint-ignore: map graphic geometry */
+  content: ""; position: absolute; left: 1px; top: 0; width: 34px; height: 34px; /* lint-ignore */
+  background: var(--color-primary); border: 3px solid var(--color-surface);
+  border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: var(--shadow-md);
+}
+.map-pin__dot { /* lint-ignore */
+  position: absolute; left: 12px; top: 11px; width: 12px; height: 12px; z-index: 1; /* lint-ignore */
+  background: var(--color-reward); border-radius: 50%;
+}
+.map-recenter {
+  display: grid; place-items: center;
+  inline-size: var(--control-height-md); block-size: var(--control-height-md);
+  background: var(--color-surface); color: var(--color-text);
+  border: var(--border-width-strong) solid var(--color-border-strong); border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.map-recenter:hover { background: var(--color-primary-subtle); }
+.map-recenter:focus-visible { box-shadow: var(--focus-shadow); }
+.att-map .leaflet-bar a, .att-map.leaflet-touch .leaflet-bar a { inline-size: var(--control-height-md); block-size: var(--control-height-md); line-height: var(--control-height-md); }
 
 /* ---------- Event / request lists ---------- */
 .event-list { display: flex; flex-direction: column; padding: 0; margin: 0; list-style: none; }
@@ -99,3 +134,10 @@ details > summary { cursor: pointer; }
   .card { box-shadow: none; break-inside: avoid; border-color: var(--color-border-strong); }
   body { background: var(--color-surface); }
 }
+
+
+/* ---------- Dashboard statistics: balanced rows for any card count ----------
+   Flex wrap with growing items: 5 cards sit in one row when there is room,
+   otherwise rows share the width evenly — never 4 + a lone card next to a gap. */
+.stats-grid { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.stats-grid > * { flex: 1 1 11rem; min-inline-size: min(100%, 11rem); }

@@ -12,8 +12,15 @@ export async function tg(method: string, body: Record<string, unknown>) {
   const res = await fetch(`https://api.telegram.org/bot${token()}/${method}`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
-  const json = await res.json().catch(() => ({ ok: false, description: `http_${res.status}` }));
-  return json as Record<string, unknown>;
+  const json = await res.json().catch(() => ({ ok: false, description: `http_${res.status}` })) as Record<string, unknown>;
+  if (!json.ok && json.error_code === undefined) json.error_code = res.status;
+  return json;
+}
+
+/** 400 (bad chat id / bad request) and 403 (bot blocked / not started) won't succeed on retry. */
+export function isPermanentTelegramError(r: Record<string, unknown>): boolean {
+  const c = Number(r.error_code ?? 0);
+  return c === 400 || c === 401 || c === 403 || c === 404;
 }
 
 /** Secret the webhook URL is registered with (X-Telegram-Bot-Api-Secret-Token). */
@@ -43,6 +50,12 @@ export function formatOwnerMessage(p: Record<string, unknown>): { text: string; 
         text: `${head}🕒 طلب انصراف مبكر #${esc(p.id)}\nالموظف: ${esc(p.employee)}\nالتاريخ: ${esc(p.date)} — الساعة ${esc(p.time)}\n${p.reason ? `السبب: ${esc(p.reason)}\n` : ""}\nيمكنك الرد بـ: موافق ${esc(p.id)} أو رفض ${esc(p.id)}`,
         reply_markup: { inline_keyboard: [[{ text: "✅ موافقة", callback_data: `el:a:${p.id}` }, { text: "❌ رفض", callback_data: `el:r:${p.id}` }]] },
       };
+    case "leave_request": {
+      const type = p.type === "sick" ? "مرضية" : "شخصية";
+      const status = ({ pending: "بانتظار القرار", approved: "تمت الموافقة", rejected: "مرفوضة", cancelled: "ملغاة" } as Record<string, string>)[String(p.status)] ?? esc(p.status);
+      const period = p.from === p.to ? esc(p.from) : `${esc(p.from)} ← ${esc(p.to)}`;
+      return { text: `${head}🌴 طلب إجازة ${type}: ${esc(p.employee)}\nالفترة: ${period} (${esc(p.days)} يوم)\n${p.reason ? `السبب: ${esc(p.reason)}\n` : ""}الحالة: ${status}\nراجعه من شاشة «الموافقات» ← «الإجازات».` };
+    }
     case "client_lockout":
     case "global_throttle":
     case "security":

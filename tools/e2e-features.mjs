@@ -25,7 +25,7 @@ const ctxOpts = (geo, perms = ['geolocation']) => ({ viewport: { width: 390, hei
   await page.waitForSelector('text=Check out');
   check(true, 'screen switches to Check out with a running worked-time display');
   await page.fill('input[type=time]', '15:00'); await page.click('form button[type=submit]');
-  await page.waitForSelector('text=/Early leave at 15:00/');
+  await page.waitForSelector('text=/Early leave at 3:00 PM/');
   check(true, 'early-leave request submitted and shown as pending');
   await page.goto(`${base}/index.html#/owner/dashboard`); await page.waitForTimeout(300);
   check(await page.evaluate(() => location.hash) === '#/staff/home', 'staff cannot open owner routes (redirected)');
@@ -52,7 +52,7 @@ const ctxOpts = (geo, perms = ['geolocation']) => ({ viewport: { width: 390, hei
   await installMock(ctx2); const p2 = await ctx2.newPage();
   await uiLogin(p2, base, '12345678'); await p2.waitForFunction(() => location.hash === '#/staff/home');
   await p2.goto(`${base}/index.html#/staff/attendance`); await p2.waitForSelector('.att-geo--danger', { timeout: 25000 });
-  check(/permission was denied|couldn't be read/i.test(await p2.textContent('.att-geo')), 'location denied → clear instructions, no check-in');
+  check(/permission is blocked/i.test(await p2.textContent('.att-geo')), 'location denied → clear instructions, no check-in');
   await ctx2.close();
 }
 // ---- owner approvals, payroll exports
@@ -73,12 +73,11 @@ const ctxOpts = (geo, perms = ['geolocation']) => ({ viewport: { width: 390, hei
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('text=Export Excel')]);
   const xlsxPath = await dl.path();
   check(dl.suggestedFilename().endsWith('.xlsx') && fs.statSync(xlsxPath).size > 1000, 'Excel .xlsx workbook downloaded');
-  const dls = []; page.on('download', (d) => dls.push(d));
-  await page.click('text=CSV data');
-  for (let i = 0; i < 30 && dls.length < 3; i++) await page.waitForTimeout(200);
-  check(dls.length === 3, 'CSV export: attendance, point events, deductions');
-  const att = dls.find((d) => d.suggestedFilename().includes('attendance'));
-  const csv = att ? fs.readFileSync(await att.path(), 'utf8') : '';
+  await page.selectOption('select', 'attendance');
+  const [att] = await Promise.all([page.waitForEvent('download'), page.click('text=CSV data')]);
+  check(/attendance\.csv$/.test(att.suggestedFilename()), 'CSV export: one chosen file per click (attendance)');
+  const csv = fs.readFileSync(await att.path(), 'utf8');
+  check(csv.charCodeAt(0) === 0xfeff, 'CSV starts with a UTF-8 BOM');
   check(csv.includes("'=cmd()"), 'spreadsheet formula injection neutralised in CSV');
   await ctx.close();
 }

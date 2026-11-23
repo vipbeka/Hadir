@@ -25,7 +25,7 @@ export async function renderOwnerDashboard(main, { me }) {
         : e.today.checked_out_at ? badge(t('od.out', { time: formatTime(e.today.checked_out_at) }), { tone: 'info' })
         : badge(t('od.present', { time: formatTime(e.today.checked_in_at) }), { tone: e.today.outcome === 'red' ? 'point-red' : 'success', dot: true });
       fill(body, 
-        h('div', { class: 'grid-auto' },
+        h('div', { class: 'stats-grid' },
           tile(t('od.pendingBlack'), d.pending.black, 'black'), tile(t('od.pendingLeave'), d.pending.leave, 'leave'),
           tile(t('od.pendingEarly'), d.pending.early_leave, 'early'), tile(t('od.pendingReward'), d.pending.reward, 'reward'),
           tile(t('od.missing'), d.pending.missing_checkout, 'missing')),

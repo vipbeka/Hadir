@@ -4,7 +4,7 @@ import { t, setDocumentTitle } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
 import { sb } from '../../core/supabase.js';
 import { errorMessage } from '../../core/errors.js';
-import { formatDate, hhmm } from '../../core/format.js';
+import { formatDate, formatClock } from '../../core/format.js';
 import { pageHeader } from '../../shell/shell.js';
 import { card, badge, emptyState, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
@@ -30,7 +30,7 @@ export async function renderStaffRequests(main, { me }) {
         card({ title: t('req.leave'), body: lv.data.length ? h('ul', { class: 'event-list', role: 'list' }, lv.data.map(leaveRow)) : h('p', { class: 'text-sm text-muted' }, t('req.empty')) }),
         card({ title: t('req.early'), body: el.data.length ? h('ul', { class: 'event-list', role: 'list' }, el.data.map((r) => h('li', { class: 'event-row' },
           badge(t(`status.${r.status}`), { tone: tone(r.status), dot: true }),
-          h('div', { class: 'event-row__main' }, h('span', { class: 'num' }, `${formatDate(r.work_date)} · ${hhmm(r.requested_leave_time)}`),
+          h('div', { class: 'event-row__main' }, h('span', { class: 'num' }, `${formatDate(r.work_date)} · ${formatClock(r.requested_leave_time)}`),
             r.reason ? h('span', { class: 'text-xs text-muted' }, r.reason) : null,
             r.admin_comment ? h('span', { class: 'text-xs text-muted' }, t('req.ownerComment', { c: r.admin_comment })) : null)))) : h('p', { class: 'text-sm text-muted' }, t('req.empty')) }));
     } catch (err) { fill(body, emptyState({ iconName: 'alertTriangle', title: t('error.title'), text: errorMessage(err), error: true })); }
@@ -58,16 +58,28 @@ export async function renderStaffRequests(main, { me }) {
     const fReason = textarea({ label: t('common.reason'), hint: t('common.optional'), rows: 2 });
     fFrom.querySelector('input').addEventListener('change', (e) => { const to = fTo.querySelector('input'); if (!to.value) to.value = e.target.value; });
     const send = button({ label: t('common.submit'), variant: 'primary', type: 'submit', attrs: { form: 'leave-form' } });
+    let sending = false;
     const form = h('form', { id: 'leave-form', class: 'stack', novalidate: true, onSubmit: async (e) => {
       e.preventDefault();
+      if (sending) return;                                   // no double submission
       const from = fFrom.querySelector('input').value, to = fTo.querySelector('input').value;
       if (!from || !to || to < from) { setFieldError(fTo, t('err.invalid_dates')); return; }
-      setFieldError(fTo, null); setLoading(send, true);
+      setFieldError(fTo, null); sending = true; setLoading(send, true);
+      let saved = false;
       try {
         await api('request_leave', { type: fType.querySelector('select').value, from_date: from, to_date: to, reason: fReason.querySelector('textarea').value });
-        m.close(); toast({ title: t('req.sent'), tone: 'success' }); load();
-      } catch (err) { setFieldError(fTo, errorMessage(err)); }
-      finally { setLoading(send, false); }
+        saved = true;
+      } catch (err) {
+        // stays open with the entered data and a clear message
+        setFieldError(fTo, errorMessage(err));
+      } finally { sending = false; setLoading(send, false); }
+      if (saved) {
+        // The request is saved; the owner's Telegram alert is sent separately
+        // in the background and can never keep this dialog open.
+        m.close('saved');
+        toast({ title: t('req.sent'), tone: 'success' });
+        load();
+      }
     } }, fType, h('div', { class: 'form-grid' }, fFrom, fTo), fReason);
     const m = modal({ title: t('req.newLeave'), body: form, actions: [button({ label: t('common.cancel'), onClick: () => m.close() }), send] });
     m.open();

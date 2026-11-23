@@ -7,7 +7,7 @@ import { sb } from '../core/supabase.js';
 import { api } from '../core/api.js';
 import { errorMessage } from '../core/errors.js';
 import { pageHeader } from '../shell/shell.js';
-import { progress, badge, emptyState, skeletonCard } from '../ui/display.js';
+import { progress, badge, alert, emptyState, skeletonCard } from '../ui/display.js';
 import { icon } from '../ui/icons.js';
 
 const name = (r) => (getLang() === 'ar' ? r.full_name_ar : r.full_name_en);
@@ -27,9 +27,15 @@ export async function renderLeaderboard(main, { me }) {
       extra = Object.fromEntries(d.employees.map((e) => [e.full_name_en, e]));
     }
     clear(body);
-    if (!data.length && me.role !== 'owner') { add(body, emptyState({ iconName: 'trophy', title: t('lb.hidden') })); return; }
-    if (!data.some((r) => r.green > 0)) add(body, emptyState({ iconName: 'trophy', title: t('lb.empty'), text: t('lb.emptyText') }));
-    add(body, h('ol', { class: 'leaderboard', role: 'list' }, data.map((r) => {
+    // One render decision: error (catch) / empty / list (+ an accurate note when nobody has points yet)
+    const rows = Array.isArray(data) ? data : [];
+    if (!rows.length) {
+      add(body, me.role === 'owner' ? emptyState({ iconName: 'users', title: t('od.noStaff') })
+                                    : emptyState({ iconName: 'trophy', title: t('lb.hidden') }));
+      return;
+    }
+    if (!rows.some((r) => Number(r.green) > 0)) add(body, alert(t('lb.zeroNote'), { tone: 'info' }));
+    add(body, h('ol', { class: 'leaderboard', role: 'list' }, rows.map((r) => {
       const x = extra[r.full_name_en];
       return h('li', { class: ['lb-row', r.is_me && 'lb-row--me', r.rank === 1 && r.green > 0 && 'lb-row--top'] },
         h('span', { class: 'lb-rank num', 'aria-label': `${t('lb.rank')} ${r.rank}` }, r.rank === 1 && r.green > 0 ? icon('trophy') : String(r.rank)),

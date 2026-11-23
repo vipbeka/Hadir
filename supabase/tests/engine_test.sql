@@ -77,14 +77,28 @@ select pg_temp.expect_err($$select public.svc_check_out('00000000-0000-4000-b000
 select pg_temp.ok((select green from public.v_point_totals where employee_id = '00000000-0000-4000-b000-00000000000a') = 1, 'green total derived = 1');
 select pg_temp.expect_err($$select public.svc_check_in('00000000-0000-4000-b000-000000000001', '{"lat":29.9831944,"lng":31.3239444,"accuracy":8}')$$, 'staff_only', 'owner account is not tracked');
 
--- 3) red + warning policy + rule version snapshots --------------------
+-- 3) #12 closing time + red warning policy + rule version snapshots ----
+-- a seeded work day (Sun–Thu, Early/Normal/Late) that is NOT today's weekday
+create function pg_temp.other_day() returns date language sql as $$
+  select d::date from generate_series((now() at time zone 'Africa/Cairo')::date + 1, (now() at time zone 'Africa/Cairo')::date + 7, interval '1 day') d
+   where extract(dow from d) between 0 and 4 and extract(dow from d) <> extract(dow from (now() at time zone 'Africa/Cairo')) limit 1 $$;
+select pg_temp.ok(private.checkin_close_time(pg_temp.other_day()) = '11:00', 'closing time = end of the last enabled window (11:00)');
+select pg_temp.ok(not private.checkin_closed(pg_temp.other_day(), '10:59:59'), 'just before closing → check-in allowed');
+select pg_temp.ok(private.checkin_closed(pg_temp.other_day(), '11:00'), 'exactly at closing → closed');
+select pg_temp.ok(private.checkin_closed(pg_temp.other_day(), '11:00:01'), 'just after closing → closed');
+select pg_temp.ok(private.checkin_close_time('2026-11-27') is null and not private.checkin_closed('2026-11-27', '23:00'), 'day without enabled windows → no closing rule');
 do $$ declare v_dow int := extract(dow from (now() at time zone 'Africa/Cairo')); t time := (now() at time zone 'Africa/Cairo')::time;
-begin  -- move the only window into the past → check-in after last window = red
+begin  -- move the only window into the past → the day is closed for new check-ins
   update public.check_in_windows set start_time = '00:00', end_time = (t - interval '1 minute')::time where day_of_week = v_dow;
 end $$;
-select pg_temp.ok((public.svc_check_in('00000000-0000-4000-b000-00000000000b', '{"lat":29.9831944,"lng":31.3239444,"accuracy":8}') ->> 'outcome') = 'red', 'check-in after the last window → red');
+select pg_temp.expect_err($$select public.svc_check_in('00000000-0000-4000-b000-00000000000b', '{"lat":29.9831944,"lng":31.3239444,"accuracy":8}')$$, 'check_in_closed', 'check-in after the last window closed is refused (server clock)');
+select pg_temp.ok((select count(*) from public.attendance_days where employee_id = '00000000-0000-4000-b000-00000000000b') = 0, 'refused check-in writes no attendance row');
+select pg_temp.ok((select count(*) from public.point_events where employee_id = '00000000-0000-4000-b000-00000000000b') = 0, 'refused check-in creates no point/penalty');
+select pg_temp.ok((public.svc_my_day('00000000-0000-4000-b000-00000000000b') ->> 'check_in_closed')::boolean, 'my_day reports the day as closed');
+-- the red warning policy itself is unchanged (exercised through owner-added reds)
+select public.svc_manual_adjust('00000000-0000-4000-b000-000000000001', '{"employee_id":"00000000-0000-4000-b000-00000000000b","action":"add","color":"red","reason":"late meeting 1"}');
 select pg_temp.ok((select warning_only and deduction_amount_piastres = 0 from public.point_events where employee_id = '00000000-0000-4000-b000-00000000000b' and color = 'red'), 'first red of the period is a warning (0 EGP)');
-select pg_temp.ok((select count(*) from public.notification_outbox where event_type = 'red_point') = 1, 'owner Telegram alert queued for the red point');
+
 select pg_temp.ok((public.svc_update_settings('00000000-0000-4000-b000-000000000001', '{"red_penalty_piastres": 7500}') ->> 'rule_version')::int = 2, 'editing the red amount bumps rule_version');
 select pg_temp.expect_err($$select public.svc_update_settings(null, '{"red_penalty_piastres": 7550}')$$, 'invalid_amount', 'fractional EGP amount rejected');
 select pg_temp.expect_err($$select public.svc_update_settings(null, '{"work_start_time": "18:00"}')$$, 'invalid_settings', 'work start after end rejected');
@@ -107,17 +121,26 @@ select private.run_absence((now() at time zone 'Africa/Cairo')::date);
 select pg_temp.ok((select count(*) from public.point_events where source = 'auto_absence' and employee_id = '00000000-0000-4000-b000-00000000000c') = 1, 'no check-in, no leave → exactly one pending black (job ran twice)');
 select pg_temp.ok((select status from public.point_events where source = 'auto_absence' and employee_id = '00000000-0000-4000-b000-00000000000c') = 'pending_approval', 'absence black is pending approval');
 select pg_temp.ok((select count(*) from public.point_events where source = 'auto_absence' and employee_id = '00000000-0000-4000-b000-00000000000d') = 0, 'inactive employee skipped');
-select pg_temp.ok((select count(*) from public.point_events where source = 'auto_absence' and employee_id in ('00000000-0000-4000-b000-00000000000a', '00000000-0000-4000-b000-00000000000b')) = 0, 'checked-in employees get no absence');
+select pg_temp.ok((select count(*) from public.point_events where source = 'auto_absence' and employee_id = '00000000-0000-4000-b000-00000000000a') = 0, 'checked-in employee gets no absence');
+select pg_temp.ok((select count(*) from public.point_events where source = 'auto_absence' and employee_id = '00000000-0000-4000-b000-00000000000b') = 1, 'refused late check-in → absence follows its ORIGINAL path (pending black)');
 select pg_temp.ok((select detail::text like '%No Check-In, No Leave -> Black Point Pending Approval%' from public.job_runs where job_name = 'absence' limit 1), 'per-employee log line recorded');
 select private.run_absence((now() at time zone 'Africa/Cairo')::date - 1);
 select pg_temp.ok((select detail::text like '%Approved Leave Found -> No Absence Penalty%' from public.job_runs where job_name = 'absence' and run_key = ((now() at time zone 'Africa/Cairo')::date - 1)::text)
    or (select status from public.job_runs where job_name = 'absence' and run_key = ((now() at time zone 'Africa/Cairo')::date - 1)::text) = 'skipped',
    'approved leave → "Approved Leave Found -> No Absence Penalty" (or day skipped)');
 select pg_temp.ok((select black from public.v_point_totals where employee_id = '00000000-0000-4000-b000-00000000000c') is null, 'pending black does not count in totals');
--- late check-in after the absence job cancels the pending black and records a red
+-- a check-in while a window is still open cancels a pending absence (never both)
+do $$ declare v_dow int := extract(dow from (now() at time zone 'Africa/Cairo')); t time := (now() at time zone 'Africa/Cairo')::time;
+begin
+  if t > '00:30' and t < '23:20' then
+    update public.check_in_windows set start_time = (t - interval '20 minutes')::time, end_time = (t + interval '20 minutes')::time where day_of_week = v_dow;
+  end if;
+end $$;
 select public.svc_check_in('00000000-0000-4000-b000-00000000000c', '{"lat":29.9831944,"lng":31.3239444,"accuracy":8}');
-select pg_temp.ok((select status from public.point_events where source = 'auto_absence' and employee_id = '00000000-0000-4000-b000-00000000000c') = 'cancelled', 'late check-in cancels the pending absence');
-select pg_temp.ok((select count(*) from public.point_events where employee_id = '00000000-0000-4000-b000-00000000000c' and color = 'red' and source = 'auto_window') = 1, '… and records the late red instead (never both)');
+select pg_temp.ok((select status from public.point_events where source = 'auto_absence' and employee_id = '00000000-0000-4000-b000-00000000000c'
+   and effective_work_date = (now() at time zone 'Africa/Cairo')::date) = 'cancelled', 'check-in cancels the pending absence');
+select pg_temp.ok((select count(*) from public.point_events where employee_id = '00000000-0000-4000-b000-00000000000c' and color = 'black' and status = 'active'
+   and effective_work_date = (now() at time zone 'Africa/Cairo')::date) = 0, '… and never charges absence for a day with a check-in');
 
 -- 5) black approval + retroactive leave -------------------------------
 select private.add_event('00000000-0000-4000-b000-00000000000c', (now() at time zone 'Africa/Cairo')::date - 2,
@@ -138,11 +161,7 @@ select public.svc_cancel_leave('00000000-0000-4000-b000-00000000000c', '{"id":"3
 select pg_temp.ok((select count(*) from public.point_events where reverses_event_id = (select id from public.point_events where idempotency_key = 'absence:test:c:2') and status = 'active') = 1, 'cancelling the leave does not resurrect the reversed point');
 
 -- 6) early leave ------------------------------------------------------
-do $$ begin
-  if (now() at time zone 'Africa/Cairo')::time < '16:30' then
-    update public.settings set work_end_time = '23:59';
-  end if;
-end $$;
+update public.settings set work_end_time = '23:59';  -- test-only: keep "now + 5 min" inside the work day
 select pg_temp.expect_err($$select public.svc_request_early_leave('00000000-0000-4000-b000-00000000000a', '{"leave_time":"00:01"}')$$, 'invalid_time', 'early leave before now rejected');
 do $$ declare r jsonb; t text := to_char((now() at time zone 'Africa/Cairo') + interval '5 minutes', 'HH24:MI');
 begin
@@ -201,8 +220,19 @@ select pg_temp.ok(private.enqueue_push('00000000-0000-4000-b000-00000000000b', '
 select pg_temp.ok(jsonb_array_length(public.svc_claim_outbox(100)) >= 1, 'dispatcher claims due messages');
 select public.svc_outbox_result((select id from public.notification_outbox where event_type = 'shift_start'), false, null, 'gone', true);
 select pg_temp.ok((select not enabled from public.push_subscriptions where id = '40000000-0000-4000-b000-000000000001'), '404/410 disables the subscription');
-select public.svc_outbox_result((select id from public.notification_outbox where event_type = 'red_point' order by created_at, id limit 1), false, null, 'timeout', false);
-select pg_temp.ok((select status = 'failed' and next_attempt_at > now() from public.notification_outbox where event_type = 'red_point' order by created_at, id limit 1), 'failed send scheduled for retry (never blocks the write)');
+select public.svc_outbox_result((select id from public.notification_outbox where event_type = 'black_pending' order by created_at, id limit 1), false, null, 'timeout', false);
+select pg_temp.ok((select status = 'failed' and next_attempt_at > now() from public.notification_outbox where event_type = 'black_pending' order by created_at, id limit 1), 'failed send scheduled for retry (never blocks the write)');
+
+-- 12) #3 12-hour Cairo time + #2 leave alert ------------------------------
+select pg_temp.ok(private.fmt12('16:44', 'ar') = '4:44 م' and private.fmt12('16:44', 'en') = '4:44 PM', '16:44 → 4:44 م / 4:44 PM');
+select pg_temp.ok(private.fmt12('00:05', 'ar') = '12:05 ص' and private.fmt12('12:00', 'en') = '12:00 PM', 'midnight → 12:05 ص, noon → 12:00 PM');
+select pg_temp.ok(private.fmt12_ts('2026-07-15T13:44:00Z', 'en') = '4:44 PM', 'summer (UTC+3) timestamp → 4:44 PM Cairo');
+select pg_temp.ok(private.fmt12_ts('2026-01-15T14:44:00Z', 'en') = '4:44 PM', 'winter (UTC+2) timestamp → 4:44 PM Cairo');
+select public.svc_request_leave('00000000-0000-4000-b000-00000000000b', jsonb_build_object('type', 'sick', 'from_date', (now() at time zone 'Africa/Cairo')::date + 3, 'to_date', (now() at time zone 'Africa/Cairo')::date + 4, 'reason', 'flu'));
+select pg_temp.ok((select count(*) from public.notification_outbox where event_type = 'leave_request' and channel = 'telegram') = 1, 'new leave request queues ONE owner Telegram alert');
+select pg_temp.ok((select payload ->> 'type' = 'sick' and payload ->> 'reason' = 'flu' and (payload ->> 'days')::int = 2 and payload ->> 'status' = 'pending'
+   from public.notification_outbox where event_type = 'leave_request'), 'alert carries employee, type, period, reason and status');
+select pg_temp.ok((select recipient from public.notification_outbox where event_type = 'leave_request') = (select owner_telegram_chat_id from public.settings), 'sent only to the owner chat');
 
 -- 11) leaderboard privacy ----------------------------------------------
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-b000-00000000000a","session_id":"20000000-0000-4000-b000-00000000000a","role":"authenticated"}', true);

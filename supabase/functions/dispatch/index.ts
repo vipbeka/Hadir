@@ -9,7 +9,7 @@
 import webpush from "web-push";
 import { serve, json, fail } from "../_shared/http.ts";
 import { rpc } from "../_shared/clients.ts";
-import { tg, formatOwnerMessage } from "../_shared/telegram.ts";
+import { tg, formatOwnerMessage, isPermanentTelegramError } from "../_shared/telegram.ts";
 
 // PUBLIC key (also shipped to the browser). The private key is the
 // Edge Function secret VAPID_PRIVATE_KEY.
@@ -34,7 +34,14 @@ serve(async (req) => {
           const msg = formatOwnerMessage(r.payload);
           const res = await tg("sendMessage", { chat_id: r.recipient, text: msg.text, parse_mode: "HTML", reply_markup: msg.reply_markup });
           if (res.ok) { sent++; await rpc("svc_outbox_result", { p_id: r.id, p_ok: true, p_ref: String((res.result as Record<string, unknown>)?.message_id ?? ""), p_error: null }); }
-          else { failed++; await rpc("svc_outbox_result", { p_id: r.id, p_ok: false, p_ref: null, p_error: String(res.description ?? "telegram error") }); }
+          else {
+            // transient (429/5xx/network) → retried with backoff; permanent (400/403…) → stop now.
+            // Note: if Telegram accepted a message but the reply was lost, a retry can duplicate it;
+            // dedupe is per event (dedupe_key), not an absolute exactly-once guarantee.
+            failed++;
+            await rpc("svc_outbox_result", { p_id: r.id, p_ok: false, p_ref: null,
+              p_error: `telegram ${res.error_code ?? ""}: ${String(res.description ?? "error").slice(0, 150)}`, p_gone: isPermanentTelegramError(res) });
+          }
         } else if (r.channel === "web_push") {
           if (!vapidPrivate || !r.push) {
             failed++; await rpc("svc_outbox_result", { p_id: r.id, p_ok: false, p_ref: null, p_error: vapidPrivate ? "no subscription" : "missing VAPID_PRIVATE_KEY" });

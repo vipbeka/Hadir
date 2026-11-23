@@ -19,7 +19,8 @@ const PNG1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQV
 function mockApi(state, who, action, p) {
   const sid = state.employees.find((e) => e.role === 'staff')?.id;
   switch (action) {
-    case 'my_day': return { server_now: new Date().toISOString(), business_date: today(), business_time: '10:15:00', timezone: 'Africa/Cairo',
+    case 'my_day': return { server_now: state.serverNow ? state.serverNow() : new Date().toISOString(),
+      check_in_closes_at: state.closesAt ?? '23:59:59', check_in_closed: !!state.closed, business_date: today(), business_time: '10:15:00', timezone: 'Africa/Cairo',
       is_work_day: true, check_in_enabled: true, points_enabled: true, holiday: null,
       geofence: { lat: 29.9831944, lng: 31.3239444, radius_m: 100 }, work_start_time: '09:00:00', work_end_time: '17:00:00', expected_end_time: '17:00:00',
       windows: [{ label_ar: 'مبكر', label_en: 'Early', start: '07:00:00', end: '08:00:00', green: true }, { label_ar: 'عادي', label_en: 'Normal', start: '09:00:00', end: '10:00:00', green: true }, { label_ar: 'متأخر', label_en: 'Late', start: '10:00:00', end: '11:00:00', green: true }],
@@ -28,7 +29,7 @@ function mockApi(state, who, action, p) {
       period_totals: { green: state.green ?? 7, red: 1, black: 0 }, lifetime_totals: { green: 21, red: 2, black: 0 }, pending_black: 0, days_present: 14, worked_minutes: 6750, reward_request: state.reward || null };
     case 'check_in': state.attendance = { checked_in_at: new Date().toISOString(), checked_out_at: null, worked_minutes: null, check_in_outcome: 'green' };
       return { outcome: 'green', window_label_ar: 'متأخر', window_label_en: 'Late', checked_in_at: new Date().toISOString(), distance_m: 12, warning_only: null };
-    case 'check_out': state.attendance = { ...state.attendance, checked_out_at: new Date().toISOString(), worked_minutes: 125 }; return { worked_minutes: 125 };
+    case 'check_out': state.attendance = { ...state.attendance, checked_out_at: new Date().toISOString(), worked_minutes: 125 }; return { checked_out_at: state.attendance.checked_out_at, worked_minutes: 125, distance_m: 12 };
     case 'request_early_leave': state.earlyLeave = { id: 7, requested_leave_time: `${p.leave_time}:00`, status: 'pending' }; return state.earlyLeave;
     case 'cancel_early_leave': state.earlyLeave = null; return { result: 'cancelled' };
     case 'request_leave': return { id: 'x', status: 'pending' };
@@ -44,9 +45,14 @@ function mockApi(state, who, action, p) {
       missing_checkout: [{ id: 'a1', name_ar: 'أحمد علي', name_en: 'Ahmed Ali', work_date: today(), checked_in_at: new Date().toISOString() }] };
     case 'decide_black': if (!p.approve || p.confirm_amount_piastres === 100000) return { result: 'decided' }; throw Object.assign(new Error(), { code: 'confirm_amount' });
     case 'payroll': return { month: p.month, generated_at: new Date().toISOString(), timezone: 'Africa/Cairo', rule_version: 1, red_penalty_piastres: 5000, black_penalty_piastres: 100000, reward_amount_piastres: 10000, threshold: 30,
-      rows: state.employees.filter((e) => e.role === 'staff').map((e) => ({ ...e, worked_minutes: 6750, unresolved_flags: [], incomplete: false, deductions_piastres: 105000, bonuses_earned_piastres: 0, bonuses_paid_piastres: 0, net_adjustment_piastres: -105000,
+      rows: (state.payrollStaff || state.employees.filter((e) => e.role === 'staff')).map((e) => ({ ...e, worked_minutes: 6750, unresolved_flags: [], incomplete: false, deductions_piastres: 105000, bonuses_earned_piastres: 0, bonuses_paid_piastres: 0, net_adjustment_piastres: -105000,
         points_breakdown: { green_attendance: 7, green_outcome: 1, green_manual: 0, green_total: 8, red_warnings: 1, red_chargeable: 1, red_amount_piastres: 5000, black_approved: 1, black_amount_piastres: 100000, black_pending: 0, black_declined: 0 } })) };
-    case 'export_raw': return { attendance: [{ employee: '=cmd()', work_date: today() }], point_events: [], deductions: [] };
+    case 'export_raw': {
+      const n = state.rawRows ?? 1;
+      const attendance = [{ employee: '=cmd()', work_date: today(), checked_in_at: '2026-11-22T07:12:00Z', checked_out_at: '2026-11-22T14:44:00Z' }];
+      for (let i = 1; i < n; i++) attendance.push({ employee: `موظف ${i}`, work_date: today(), checked_in_at: '2026-11-22T07:12:00Z', checked_out_at: '2026-11-22T14:44:00Z' });
+      return { attendance, point_events: [{ employee: 'أحمد', color: 'red', reason: '+SUM(1)', created_at: '2026-07-01T12:00:00Z' }], deductions: [] };
+    }
     case 'employee_points': return [{ color: 'green', delta: 1, source: 'owner_outcome', outcome_category: 'deal_closed', reason: 'Closed X', status: 'active', effective_work_date: today(), deduction_amount_piastres: 0 }];
     case 'award_outcome': return { event_id: 'e' };
     case 'manual_adjust': return { previous: 1, total: 2, events: [] };
@@ -97,11 +103,18 @@ export async function installMock(context, state = {}) {
       const ownerOnly = ['owner_dashboard', 'pending', 'decide_black', 'payroll', 'export_raw', 'employee_points', 'award_outcome', 'manual_adjust', 'update_settings', 'save_day', 'save_holiday', 'run_job', 'set_job_title'];
       if (ownerOnly.includes(body.action) && who.role !== 'owner') return json(403, { error: 'forbidden' });
       if (body.action === 'telegram_status') return json(200, { data: { connected: false, token_missing: true } });
+      const hook = state.hook?.(body.action);
+      if (hook?.delay) await new Promise((r) => setTimeout(r, hook.delay));
+      if (hook?.mode === 'abort') return route.abort('internetdisconnected');
+      if (hook?.mode === 'abortAfterApply') { mockApi(state, who, body.action, body.params || {}); return route.abort('connectionreset'); }
+      if (hook?.mode === '500') return json(500, { error: 'server_error' });
+      if (hook?.error) return json(400, { error: hook.error, detail: hook.detail || {} });
       try { return json(200, { data: mockApi(state, who, body.action, body.params || {}) }); }
       catch (e) { return json(400, { error: e.code || 'server_error', detail: { amount_piastres: 100000 } }); }
     }
     if (url.pathname.startsWith('/rest/v1/rpc/get_leaderboard')) {
       if (!sessionOk) return json(401, {});
+      if (state.leaderboard) return json(200, state.leaderboard);
       return json(200, state.employees.filter((e) => e.role === 'staff').map((e, i) => ({ rank: i + 1, full_name_ar: e.full_name_ar, full_name_en: e.full_name_en, job_title_ar: 'محاسب', job_title_en: 'Accountant', green: 7 - i, threshold: 30, is_me: e.id === who?.id })));
     }
     const tableData = {
