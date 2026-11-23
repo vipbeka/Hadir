@@ -35,13 +35,14 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
 
 // [foreground, background, minimum, note]
 const TEXT = 4.5, LARGE = 3, UI = 3;
-const surfaces = ['--color-bg', '--color-surface', '--color-surface-sunken', '--color-surface-raised'];
+const surfaces = ['--color-bg', '--color-surface', '--color-surface-sunken', '--color-surface-raised', '--color-tile'];
 const pairs = [];
 for (const s of surfaces) {
   for (const fg of ['--color-text', '--color-text-muted', '--color-text-subtle', '--color-link', '--color-primary-text', '--color-accent-text', '--color-reward-text', '--color-success', '--color-warning', '--color-danger', '--color-info', '--color-point-green', '--color-point-red']) pairs.push([fg, s, TEXT]);
   pairs.push(['--color-border-strong', s, UI, 'form control boundary']);
 }
 pairs.push(
+  ['--color-text-on-primary', '--color-cta', TEXT, 'CTA button'], ['--color-text-on-primary', '--color-cta-hover', TEXT], ['--color-text-on-primary', '--color-cta-pressed', TEXT],
   ['--color-text-on-primary', '--color-primary', TEXT], ['--color-text-on-primary', '--color-primary-hover', TEXT], ['--color-text-on-primary', '--color-primary-pressed', TEXT],
   ['--color-surface', '--color-danger', TEXT, 'danger button label'], ['--color-surface', '--color-danger-hover', TEXT],
   ['--color-reward-on', '--color-reward', TEXT], ['--color-reward-on', '--color-reward-shine', TEXT], ['--color-reward-on', '--color-reward-border', TEXT],

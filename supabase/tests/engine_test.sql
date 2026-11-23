@@ -239,7 +239,13 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-b000-0000000
 set local role authenticated;
 select pg_temp.ok((select count(*) from public.get_leaderboard()) = 3, 'leaderboard lists active staff only');
 select pg_temp.ok((select green from public.get_leaderboard() where is_me) = 30, 'own row flagged + green progress');
-select pg_temp.ok((select count(*) from information_schema.routines r where r.routine_name = 'get_leaderboard') = 1, 'safe function exposes rank/name/green/threshold only');
+select pg_temp.ok((select count(*) from information_schema.routines r where r.routine_name = 'get_leaderboard') = 2, 'leaderboard functions: no-arg + scoped overload');
+select pg_temp.ok((select array_agg(distinct p.proretset::text) = '{true}' and bool_and(pg_get_function_result(p.oid) not like '%red%' and pg_get_function_result(p.oid) not like '%black%' and pg_get_function_result(p.oid) not like '%deduct%')
+   from pg_proc p where p.proname = 'get_leaderboard'), 'both expose rank/name/green/threshold only (no penalties)');
+select pg_temp.ok((select green from public.get_leaderboard('month') where is_me) = 30, 'scope month = current period');
+select pg_temp.ok((select coalesce(sum(green), 0) from public.get_leaderboard('prev')) = 0, 'scope prev = previous period (empty in fixtures)');
+select pg_temp.ok((select green from public.get_leaderboard('all') where is_me) >= 30, 'scope all = lifetime green');
+select pg_temp.expect_err($$select * from public.get_leaderboard('x')$$, 'invalid_scope', 'unknown scope rejected');
 reset role;
 update public.settings set leaderboard_visible = false;
 set local role authenticated;

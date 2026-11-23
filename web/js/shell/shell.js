@@ -76,10 +76,15 @@ export function renderShell(root, { nav, currentPath, user, onSignOut }) {
     if (dur > 0) { drawer.addEventListener('animationend', done, { once: true }); setTimeout(done, dur + 120); } else done();
   }
 
+  const current = nav.find((i) => i.path === currentPath.split('?')[0]);
+  const accountItem = nav.find((i) => i.path.endsWith('/account'));
   const topbar = h('header', { class: 'topbar' },
-    wordmark({ href: `#${nav[0].path}` }),
-    h('div', { class: 'topbar__actions' },
-      button({ label: t('common.menu'), variant: 'ghost', icon: 'menu', iconOnly: true, onClick: openDrawer })));
+    h('div', { class: 'topbar__start' },
+      button({ label: t('common.menu'), variant: 'ghost', icon: 'menu', iconOnly: true, onClick: openDrawer }),
+      wordmark({ href: `#${nav[0].path}` }),
+      current ? h('span', { class: 'topbar__title' }, t(current.labelKey)) : null),
+    accountItem ? h('a', { class: 'topbar__avatar', href: `#${accountItem.path}`, 'aria-label': t(accountItem.labelKey),
+      'aria-current': current === accountItem ? 'page' : null }, icon('user')) : null);
 
   // ----- bottom bar -----
   const bottomItems = nav.length > BOTTOM_MAX ? nav.slice(0, BOTTOM_MAX - 1) : nav;
@@ -101,12 +106,18 @@ export function renderShell(root, { nav, currentPath, user, onSignOut }) {
   return { main };
 }
 
-/** pageHeader({ eyebrow, title, subtitle, actions }) */
-export function pageHeader({ eyebrow, title, subtitle, actions }) {
-  return h('header', { class: 'page-header' },
-    h('div', { class: 'stack stack--sm' },
+/**
+ * pageHeader({ eyebrow, chips, title, subtitle, actions, aside })
+ * `chips` (nodes) sit above the title; `aside` is a small block at the
+ * inline end (e.g. a balance or greeting).
+ */
+export function pageHeader({ eyebrow, chips, title, subtitle, actions, aside }) {
+  return h('header', { class: ['page-header', aside && 'page-header--aside'] },
+    h('div', { class: 'page-header__main' },
+      chips ? h('div', { class: 'page-header__chips' }, chips) : null,
       eyebrow ? h('p', { class: 'page-header__eyebrow' }, eyebrow) : null,
       h('h1', { class: 'page-header__title' }, title),
       subtitle ? h('p', { class: 'page-header__subtitle' }, subtitle) : null),
+    aside ? h('div', { class: 'page-header__aside' }, aside) : null,
     actions ? h('div', { class: 'page-header__actions' }, actions) : null);
 }

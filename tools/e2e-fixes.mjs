@@ -20,7 +20,7 @@ async function staffPage({ geo = INSIDE, perms = ['geolocation'], lang = 'en', s
   return { ctx, page, state, errors };
 }
 const count = (state, action) => state.calls.filter((c) => c.body?.action === action).length;
-const actionBtn = (page) => page.locator('.att-card .btn--primary');
+const actionBtn = (page) => page.locator('.att-action .btn--primary');
 
 // ---------------------------------------------------------------- 1. check-out
 for (const scenario of ['normal', 'rapid', 'slow', 'savedButLost', 'dropped', 'server500']) {
@@ -31,18 +31,18 @@ for (const scenario of ['normal', 'rapid', 'slow', 'savedButLost', 'dropped', 's
   if (scenario === 'server500') state.hook = (a) => (a === 'check_out' ? { mode: '500' } : null);
   const { ctx, page, errors } = await staffPage({ state });
   await page.goto(`${base}/index.html#/staff/attendance`);
-  await page.waitForSelector('.att-card .btn--primary:not([disabled])', { timeout: 20000 });
+  await page.waitForSelector('.att-action .btn--primary:not([disabled])', { timeout: 20000 });
   check(/Check out/.test(await actionBtn(page).textContent()), `[${scenario}] check-out button ready`);
-  await page.evaluate(() => { window.__busy = false; const mo = new MutationObserver(() => { const b = document.querySelector('.att-card .btn--primary'); if (!b || b.disabled || b.getAttribute('aria-busy') === 'true') window.__busy = true; });
-    mo.observe(document.querySelector('.att-card'), { subtree: true, childList: true, attributes: true }); });
+  await page.evaluate(() => { window.__busy = false; const mo = new MutationObserver(() => { const b = document.querySelector('.att-action .btn--primary'); if (!b || b.disabled || b.getAttribute('aria-busy') === 'true') window.__busy = true; });
+    mo.observe(document.querySelector('.att-action'), { subtree: true, childList: true, attributes: true }); });
   const t0 = Date.now();
-  if (scenario === 'rapid') await page.evaluate(() => { const b = document.querySelector('.att-card .btn--primary'); b.click(); b.click(); b.click(); });
+  if (scenario === 'rapid') await page.evaluate(() => { const b = document.querySelector('.att-action .btn--primary'); b.click(); b.click(); b.click(); });
   else await actionBtn(page).click();
   await page.waitForTimeout(100);
   const busy = await page.evaluate(() => window.__busy);
   check(busy, `[${scenario}] button shows a busy state immediately`);
   if (['normal', 'rapid', 'savedButLost'].includes(scenario)) {
-        await page.waitForFunction(() => !document.querySelector('.att-card .btn--primary') || !/Check out/.test(document.querySelector('.att-card .btn--primary').textContent), null, { timeout: 20000 });
+        await page.waitForFunction(() => !document.querySelector('.att-action .btn--primary') || !/Check out/.test(document.querySelector('.att-action .btn--primary').textContent), null, { timeout: 20000 });
     check(true, `[${scenario}] UI switched to "checked out" without a reload (${Date.now() - t0} ms)`);
     check(state.attendance.checked_out_at, `[${scenario}] server has the check-out`);
     if (scenario === 'rapid') check(count(state, 'check_out') === 1, `[rapid] exactly one check_out request sent (${count(state, 'check_out')})`);
@@ -54,13 +54,13 @@ for (const scenario of ['normal', 'rapid', 'slow', 'savedButLost', 'dropped', 's
     await page.waitForFunction(() => /isn't recorded|try again/i.test(document.body.textContent), null, { timeout: 25000 });
     check(true, `[${scenario}] failure explained after ${Date.now() - t0} ms (bounded wait)`);
     check(count(state, 'my_day') >= 2, `[${scenario}] read the record back before offering a retry`);
-    await page.waitForSelector('.att-card .btn--primary:not([disabled])', { timeout: 5000 });
+    await page.waitForSelector('.att-action .btn--primary:not([disabled])', { timeout: 5000 });
     check(true, `[${scenario}] button re-enabled (finally)`);
     if (scenario === 'slow') await page.waitForTimeout(2000); // let the slow mock finish before retry
     state.hook = null;
     if (scenario === 'slow') state.attendance.checked_out_at = null; // the late write is still "unconfirmed" for this check
     await actionBtn(page).click();
-    await page.waitForFunction(() => !document.querySelector('.att-card .btn--primary') || !/Check out/.test(document.querySelector('.att-card .btn--primary').textContent), null, { timeout: 20000 });
+    await page.waitForFunction(() => !document.querySelector('.att-action .btn--primary') || !/Check out/.test(document.querySelector('.att-action .btn--primary').textContent), null, { timeout: 20000 });
     check(true, `[${scenario}] retry succeeds and UI updates in place`);
   }
   check(!errors.length, `[${scenario}] no page errors ${errors.join(' | ')}`);
@@ -94,7 +94,7 @@ for (const [code, rx] of [[3, /15 seconds/], [2, /unavailable/i]]) {
   await page.goto(`${base}/index.html#/staff/attendance`);
   await page.waitForSelector('text=/Check-in time for today has ended/', { timeout: 15000 });
   check(/12:00 AM/.test(await page.textContent('main')), 'closed message shows 12-hour time');
-  check(await page.locator('.att-card .btn--primary', { hasText: 'Check in' }).count() === 0, 'no check-in button after closing');
+  check(await page.locator('.att-action .btn--primary', { hasText: 'Check in' }).count() === 0, 'no check-in button after closing');
   check(count(state, 'check_in') === 0, 'no check_in request sent');
   await ctx.close();
 }
@@ -102,7 +102,7 @@ for (const [code, rx] of [[3, /15 seconds/], [2, /unavailable/i]]) {
   const closes = cairoHms(new Date(Date.now() + 6000));
   const { ctx, page } = await staffPage({ state: { closesAt: closes } });
   await page.goto(`${base}/index.html#/staff/attendance`);
-  await page.waitForSelector('.att-card .btn--primary:not([disabled])', { timeout: 15000 });
+  await page.waitForSelector('.att-action .btn--primary:not([disabled])', { timeout: 15000 });
   check(true, `open page before closing (${closes} Cairo): check-in available`);
   await page.waitForSelector('text=/Check-in time for today has ended/', { timeout: 15000 });
   check(true, 'page left open across the closing time → switches to "closed" by itself');
@@ -111,7 +111,7 @@ for (const [code, rx] of [[3, /15 seconds/], [2, /unavailable/i]]) {
 { // server is the authority: UI thinks open, server refuses
   const { ctx, page, state } = await staffPage({ state: { hook: (a) => (a === 'check_in' ? { error: 'check_in_closed', detail: { closes_at: '11:00:00' } } : null) } });
   await page.goto(`${base}/index.html#/staff/attendance`);
-  await page.waitForSelector('.att-card .btn--primary:not([disabled])', { timeout: 15000 });
+  await page.waitForSelector('.att-action .btn--primary:not([disabled])', { timeout: 15000 });
   await actionBtn(page).click();
   await page.waitForFunction(() => /11:00 AM/.test(document.querySelector('.toast-region')?.textContent || ''), null, { timeout: 10000 });
   check(!state.attendance, 'server refusal (check_in_closed) → message with 11:00 AM, nothing recorded');
@@ -173,7 +173,7 @@ for (const lang of ['ar', 'en']) {
 // ---------------------------------------------------------------- 11. progress bar values
 for (const g of [0, 1, 29, 30, 31]) {
   const { ctx, page } = await staffPage({ state: { green: g } });
-  await page.waitForSelector('.progress--reward'); await page.waitForTimeout(900);
+  await page.goto(`${base}/index.html#/staff/points`); await page.waitForSelector('.progress--reward'); await page.waitForTimeout(900);
   const r = await page.evaluate(() => {
     const tr = document.querySelector('.progress--reward .progress__track'); const f = tr.querySelector('.progress__fill');
     return { var: tr.style.getPropertyValue('--progress'), fill: f.getBoundingClientRect().width, track: tr.getBoundingClientRect().width,
@@ -197,9 +197,24 @@ for (const g of [0, 1, 29, 30, 31]) {
     await page.goto(`${base}/index.html#/staff/leaderboard`); await page.waitForTimeout(900);
     const txt = await page.textContent('main');
     check(pred(txt), `leaderboard [${name}] renders the right single state`);
-    check(!/red|black|deduct/i.test(txt.replace(/Ahmed|Badr/g, '')) || name === 'empty', `leaderboard [${name}] shows no penalties`);
+    const list = (await page.locator('.leaderboard').count()) ? await page.textContent('.leaderboard') : '';
+    check(!/red|black|deduct|EGP/i.test(list.replace(/Ahmed|Badr/g, '')) && !(await page.locator('.leaderboard .badge--point-red, .leaderboard .badge--point-black').count()), `leaderboard [${name}] shows no penalties`);
     await ctx.close();
   }
+}
+
+// ---------------------------------------------------------------- leaderboard tabs + home closing time
+{
+  const { ctx, page, state } = await staffPage({ state: { closesAt: '11:00:00' } });
+  await page.waitForSelector('.today-box');
+  check(/until 11:00 AM|has ended \(11:00 AM\)/.test(await page.textContent('main')), 'home shows the real check-in closing time (11:00 AM)');
+  await page.goto(`${base}/index.html#/staff/leaderboard`); await page.waitForSelector('.tabs__btn');
+  for (const [label, scope] of [['Last month', 'prev'], ['All time', 'all'], ['This month', 'month']]) {
+    await page.click(`.tabs__btn:has-text("${label}")`); await page.waitForTimeout(500);
+    const last = state.calls.filter((c) => c.path.includes('get_leaderboard')).at(-1);
+    check(last?.body?.p_scope === scope && (await page.getAttribute(`.tabs__btn:has-text("${label}")`, 'aria-selected')) === 'true', `leaderboard tab "${label}" → scope ${scope}`);
+  }
+  await ctx.close();
 }
 
 // ---------------------------------------------------------------- 11. stats grid + approved label

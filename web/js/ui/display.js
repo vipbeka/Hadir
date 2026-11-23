@@ -4,16 +4,17 @@ import { h, append } from '../core/dom.js';
 import { icon } from './icons.js';
 
 /** card({ title, subtitle, body, footer, actions, facet, interactive, onClick }) */
-export function card({ title, subtitle, body, footer, actions, facet = false, interactive = false, onClick, tag } = {}) {
+export function card({ title, subtitle, body, footer, actions, facet = false, interactive = false, onClick, tag, iconName, className } = {}) {
   const el = h(tag || (interactive ? 'button' : 'section'), {
-    class: ['card', facet && 'card--facet', interactive && 'card--interactive'],
+    class: ['card', facet && 'card--facet', interactive && 'card--interactive', className],
     type: interactive ? 'button' : null,
     onClick,
   });
   if (title || actions) {
+    const text = h('div', { style: { 'min-inline-size': '0' } }, title ? h(interactive ? 'span' : 'h3', { class: 'card__title' }, title) : null,
+      subtitle ? h('p', { class: 'card__subtitle' }, subtitle) : null);
     el.append(h('div', { class: 'card__header' },
-      h('div', {}, title ? h(interactive ? 'span' : 'h3', { class: 'card__title' }, title) : null,
-        subtitle ? h('p', { class: 'card__subtitle' }, subtitle) : null),
+      iconName ? h('div', { class: 'card__head' }, h('span', { class: 'card__icon', 'aria-hidden': 'true' }, icon(iconName)), text) : text,
       actions || null));
   }
   if (body) append(el, [body]);
@@ -102,4 +103,19 @@ export function skeleton(kind = 'text', { width } = {}) {
 export function skeletonCard(label) {
   return h('div', { class: 'card', 'aria-busy': 'true', 'aria-label': label, role: 'status' },
     skeleton('title'), skeleton('text'), skeleton('text', { width: '80%' }), skeleton('block'));
+}
+
+/** chip(text, { tone, iconName, dot }) — small pill label */
+export function chip(text, { tone, iconName, dot = false } = {}) {
+  return h('span', { class: ['chip', tone && `chip--${tone}`] },
+    dot ? h('span', { class: 'chip__dot', 'aria-hidden': 'true' }) : null,
+    iconName ? icon(iconName) : null, text);
+}
+
+/** statCard({ label, iconName, value, unit, meta, metaIcon }) */
+export function statCard({ label, iconName, value, unit, meta, metaIcon }) {
+  return h('section', { class: 'card stat-card' },
+    h('div', { class: 'stat-card__top' }, h('span', {}, label), iconName ? h('span', { class: 'stat-card__icon', 'aria-hidden': 'true' }, icon(iconName)) : null),
+    h('div', {}, h('span', { class: 'stat-card__value num' }, value), unit ? h('span', { class: 'stat-card__unit' }, unit) : null),
+    meta ? h('span', { class: 'stat-card__meta' }, metaIcon ? icon(metaIcon) : null, meta) : null);
 }

@@ -17,7 +17,7 @@ import { api } from '../../core/api.js';
 import { errorMessage } from '../../core/errors.js';
 import { formatTime, formatClock, formatMinutes, hhmm } from '../../core/format.js';
 import { pageHeader } from '../../shell/shell.js';
-import { card, alert, emptyState, skeletonCard } from '../../ui/display.js';
+import { card, chip, alert, emptyState, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
 import { input, textarea, setFieldError } from '../../ui/field.js';
 import { toast } from '../../ui/toast.js';
@@ -56,9 +56,18 @@ function zonedHms(date, tz) {
   return `${p.hour}:${p.minute}:${p.second}`;
 }
 
+// "GMT+2" for the business zone at the current moment (never hard-coded)
+function tzOffsetLabel(tz) {
+  try {
+    const p = new Intl.DateTimeFormat('en-US', { timeZone: tz || 'Africa/Cairo', timeZoneName: 'shortOffset' }).formatToParts(new Date());
+    return (p.find((x) => x.type === 'timeZoneName')?.value || 'GMT').replace('GMT', 'GMT');
+  } catch { return 'GMT+2'; }
+}
+const displayInitial = (me) => String((getLang() === 'ar' ? me?.full_name_ar : me?.full_name_en) || me?.full_name_ar || '').trim().charAt(0);
+
 export async function renderAttendance(main, { me, registerCleanup }) {
   setDocumentTitle(t('att.title'));
-  add(main, pageHeader({ title: t('att.title'), subtitle: t('att.subtitle') }));
+  add(main, pageHeader({ chips: [chip(t('att.office'), { iconName: 'building' })], title: t('att.title'), subtitle: t('att.subtitle') }));
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, body);
 
@@ -72,15 +81,20 @@ export async function renderAttendance(main, { me, registerCleanup }) {
   let clockTimer = null; let lastClosed = null;
 
   // persistent nodes (created once)
-  const clock = h('output', { class: 'att-clock num', dir: 'ltr' });
+  const clock = h('output', { class: 'att-clock num' });
   const workedOut = h('output', { class: 'att-worked num' });
   const topArea = h('div', { class: 'att-top' });
   const statusArea = h('div', { class: 'stack stack--sm' });
   const mapEl = h('div', { class: 'att-map', role: 'img', 'aria-label': t('set.office') });
   const mapMsg = h('div', { class: 'att-map__msg', hidden: true });
-  const mapWrap = h('div', { class: 'att-map-wrap' }, mapEl, mapMsg);
+  const accChip = h('div', { class: 'att-acc', hidden: true });
+  const mapWrap = h('div', { class: 'att-map-wrap' }, mapEl, accChip, mapMsg);
   const geoStatus = h('div', { class: 'att-geo', role: 'status', 'aria-live': 'polite' });
-  const actionArea = h('div', { class: 'stack stack--sm' });
+  const actionArea = h('div', { class: 'stack stack--sm att-action' });
+  const tzLabel = h('span', { class: 'att-tz' });
+  const accTile = h('span', { class: 'tile__value' }, t('att.accWait'));
+  const permTile = h('span', { class: 'tile__value' }, t('att.permAsk'));
+  let permState = null;
   const windowsHost = h('div');
   const earlyHost = h('div');
 
@@ -123,12 +137,25 @@ export async function renderAttendance(main, { me, registerCleanup }) {
       fill(body, emptyState({ iconName: 'calendar', title: t('home.holiday', { name: getLang() === 'ar' ? day.holiday.name_ar : day.holiday.name_en }), text: t('err.holiday') }));
       return;
     }
+    const recenterBtn = button({ label: t('att.recenter'), variant: 'ghost', icon: 'crosshair', iconOnly: true, onClick: () => { fitted = false; showMe(true); } });
     fill(body,
-      card({ body: topArea }),
+      card({ body: [h('div', { class: 'att-time__head' },
+        h('span', { class: 'att-live' }, h('span', { class: 'att-live__dot', 'aria-hidden': 'true' }), t('att.syncedTime')),
+        h('span', { class: 'att-tz-wrap' }, icon('clock'), tzLabel)), topArea], className: 'att-time' }),
       statusArea,
-      h('section', { class: 'card att-card' }, mapWrap, geoStatus, actionArea,
-        h('p', { class: 'text-xs text-muted' }, t('att.privacy'))),
+      h('section', { class: 'card att-card' },
+        h('div', { class: 'card__header' }, h('div', { class: 'card__head' }, h('span', { class: 'card__icon', 'aria-hidden': 'true' }, icon('target')),
+          h('div', {}, h('h3', { class: 'card__title' }, t('att.geofence')), h('p', { class: 'card__subtitle' }, t('att.geofenceSub')))), recenterBtn),
+        mapWrap, geoStatus),
+      card({ className: 'att-guide', title: t('att.guide'), actions: h('span', { class: 'text-muted', 'aria-hidden': 'true' }, icon('shield')),
+        body: h('div', { class: 'tile-grid' },
+          h('div', { class: 'tile' }, h('span', { class: 'tile__label' }, icon('crosshair', { size: 'sm' }), ' ', t('att.accTile')), accTile),
+          h('div', { class: 'tile' }, h('span', { class: 'tile__label' }, icon('mapPin', { size: 'sm' }), ' ', t('att.permTile')), permTile)) }),
+      actionArea,
+      card({ iconName: 'shield', title: t('att.secureTitle'), body: h('p', { class: 'text-sm text-muted' }, t('att.privacy')), className: 'att-secure' }),
       windowsHost, earlyHost);
+    tzLabel.textContent = t('att.tzCairo', { off: tzOffsetLabel(day.timezone) });
+    watchPermission();
     refreshSections();
     clearInterval(clockTimer); clockTimer = setInterval(tick, 1000); tick();
     if (needsLocation()) { ensureMap(); if (geo === 'idle') startLocate(); }
@@ -137,7 +164,7 @@ export async function renderAttendance(main, { me, registerCleanup }) {
   function refreshSections() {
     const a = att();
     fill(topArea,
-      h('div', { class: 'stat' }, h('span', { class: 'stat__label' }, t('att.serverTime')), clock),
+      clock,
       a?.checked_in_at ? h('div', { class: 'stat' }, h('span', { class: 'stat__label' }, t('att.worked')),
         a.checked_out_at ? h('span', { class: 'att-worked num' }, formatMinutes(a.worked_minutes)) : workedOut) : null);
     fill(statusArea,
@@ -148,6 +175,7 @@ export async function renderAttendance(main, { me, registerCleanup }) {
     fill(windowsHost, windowsCard());
     fill(earlyHost, earlyLeaveCard());
     mapWrap.hidden = !needsLocation(); geoStatus.hidden = !needsLocation();
+    body.querySelector('.att-guide')?.toggleAttribute('hidden', !needsLocation());
     if (!needsLocation()) stopLocate();
     renderAction();
   }
@@ -177,10 +205,11 @@ export async function renderAttendance(main, { me, registerCleanup }) {
       onClick: () => submit(isOut ? 'check_out' : 'check_in') });
     btn.disabled = !ready || inFlight;
     if (inFlight) setLoading(btn, true, t('att.saving'));
+    if (!ready && !inFlight) { btn.querySelector('.icon')?.replaceWith(icon(geo === 'outside' ? 'mapPinOff' : 'mapPin')); }
     fill(actionArea,
       opError ? alert(opError, { tone: 'danger' }) : null,
       btn,
-      !ready && !inFlight ? h('p', { class: 'text-xs text-muted' }, t('att.needLocation')) : null);
+      !ready && !inFlight ? h('p', { class: 'hint-line' }, icon('lock'), geo === 'outside' ? t('att.hintApproach') : t('att.needLocation')) : null);
   }
 
   // ------------------------------------------------------------- submit
@@ -270,7 +299,7 @@ export async function renderAttendance(main, { me, registerCleanup }) {
     const d = Math.round(distanceM(office, pos));
     if (pos.accuracy > radius) setGeo('low', { a: Math.round(pos.accuracy) });
     else if (d > radius) setGeo('outside', { d, r: radius });
-    else setGeo('ok');
+    else setGeo('ok', { d, r: radius });
     showMe();
   }
 
@@ -301,11 +330,40 @@ export async function renderAttendance(main, { me, registerCleanup }) {
     const retry = ['timeout', 'unavailable', 'denied'].includes(state)
       ? button({ label: t('att.retryLocate'), size: 'sm', icon: 'mapPin', onClick: () => startLocate() }) : null;
     geoStatus.className = `att-geo att-geo--${tone}`;
+    const nf = new Intl.NumberFormat('en-US');
+    let main = geoText(); let detail = null;
+    if (state === 'outside') { main = t('att.outsideTitle', { d: nf.format(vars.d) }); detail = t('att.outsideDetail', { r: nf.format(vars.r) }); }
+    if (state === 'ok' && vars.d !== undefined) detail = t('att.insideDetail', { d: nf.format(vars.d), r: nf.format(vars.r) });
     fill(geoStatus,
-      state === 'locating' ? h('span', { class: 'spinner', 'aria-hidden': 'true' })
-        : icon(state === 'ok' ? 'checkCircle' : tone === 'warning' ? 'alertTriangle' : 'alertCircle'),
-      h('span', { class: 'att-geo__text' }, geoText()), retry);
+      h('span', { class: 'att-geo__icon', 'aria-hidden': 'true' }, state === 'locating' ? h('span', { class: 'spinner' })
+        : icon(state === 'ok' ? 'checkCircle' : tone === 'warning' ? 'alertTriangle' : 'alertCircle')),
+      h('span', { class: 'att-geo__text' }, h('span', { class: 'att-geo__main' }, main), detail ? h('span', { class: 'att-geo__detail' }, detail) : null),
+      retry);
+    if (state === 'denied') permState = 'denied';
+    updateTiles();
     renderAction();
+  }
+
+  // ---------------------------------------------------- guidance tiles
+  function accQuality(m) { return m <= 20 ? t('att.accHigh') : m <= 60 ? t('att.accMid') : t('att.accLow'); }
+  function updateTiles() {
+    if (pos) {
+      const m = Math.max(1, Math.round(pos.accuracy));
+      accTile.textContent = `${accQuality(m)} · ${t('att.accValue', { m })}`;
+      fill(accChip, h('span', { class: 'att-acc__dot', 'aria-hidden': 'true' }), t('att.gpsAcc', { q: accQuality(m), m }));
+      accChip.hidden = false;
+      accChip.dataset.q = m <= 20 ? 'high' : m <= 60 ? 'mid' : 'low';
+    } else { accTile.textContent = geo === 'locating' ? t('att.accWait') : '—'; accChip.hidden = true; }
+    const p = geo === 'denied' ? 'denied' : pos ? 'granted' : permState;
+    permTile.textContent = p === 'granted' ? t('att.permOn') : p === 'denied' ? t('att.permOff') : t('att.permAsk');
+    permTile.dataset.state = p || 'prompt';
+  }
+  function watchPermission() {
+    navigator.permissions?.query({ name: 'geolocation' }).then((st) => {
+      if (!alive) return;
+      permState = st.state; updateTiles();
+      st.onchange = () => { if (!alive) return; permState = st.state; updateTiles(); if (st.state === 'granted' && geo === 'denied') startLocate(); };
+    }).catch(() => {});
   }
 
   // ------------------------------------------------------------------ map
@@ -329,21 +387,16 @@ export async function renderAttendance(main, { me, registerCleanup }) {
           mapMsg.hidden = false;
         }
       });
-      L.circle(office, { radius: Number(day.geofence.radius_m), color: accent, weight: 2, fillColor: accent, fillOpacity: 0.12 }).addTo(map);
+      const primary = css.getPropertyValue('--color-primary-text').trim();
+      L.circle(office, { radius: Number(day.geofence.radius_m) * 1.6, stroke: false, fillColor: accent, fillOpacity: 0.07, interactive: false }).addTo(map);
+      L.circle(office, { radius: Number(day.geofence.radius_m), color: primary, weight: 1.5, dashArray: '4 4', fillColor: accent, fillOpacity: 0.16 }).addTo(map);
+      const officeHtml = document.createElement('div');
+      officeHtml.append(h('span', { class: 'map-office__pin' }, icon('building')), h('span', { class: 'map-label' }, t('att.officeLabel')));
       officeLayer = L.marker(office, {
-        title: 'Zintra', keyboard: false,
-        icon: L.divIcon({ className: 'map-pin', html: '<span class="map-pin__dot"></span>', iconSize: [36, 44], iconAnchor: [18, 42] }),
+        title: t('att.officeLabel'), keyboard: false,
+        icon: L.divIcon({ className: 'map-office', html: officeHtml, iconSize: [40, 40], iconAnchor: [20, 20] }),
       }).addTo(map);
       L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
-      const recenter = L.control({ position: 'topright' });
-      recenter.onAdd = () => {
-        const b = L.DomUtil.create('button', 'map-recenter');
-        b.type = 'button'; b.title = t('att.recenter'); b.setAttribute('aria-label', t('att.recenter'));
-        b.append(icon('mapPin'));
-        L.DomEvent.on(b, 'click', (e) => { L.DomEvent.stop(e); fitted = false; showMe(true); });
-        return b;
-      };
-      recenter.addTo(map);
       resizeObs = new ResizeObserver(() => map?.invalidateSize());
       resizeObs.observe(mapEl);
       window.addEventListener('orientationchange', onResize);
@@ -357,9 +410,11 @@ export async function renderAttendance(main, { me, registerCleanup }) {
     const L = window.L; const ll = [pos.lat, pos.lng];
     const css = getComputedStyle(document.documentElement);
     if (!youMarker) {
-      youAccuracy = L.circle(ll, { radius: pos.accuracy, color: css.getPropertyValue('--color-primary').trim(), weight: 1, fillOpacity: 0.08, interactive: false }).addTo(map);
-      youMarker = L.circleMarker(ll, { radius: 8, color: css.getPropertyValue('--color-surface').trim(), weight: 3,
-        fillColor: css.getPropertyValue('--color-primary').trim(), fillOpacity: 1 }).addTo(map);
+      youAccuracy = L.circle(ll, { radius: pos.accuracy, color: css.getPropertyValue('--color-point-red').trim(), weight: 1, fillOpacity: 0.06, interactive: false }).addTo(map);
+      const youHtml = document.createElement('div');
+      youHtml.append(h('span', { class: 'map-you__pin' }, (displayInitial(me) || '•')), h('span', { class: 'map-label map-label--you' }, t('att.youLabel')));
+      youMarker = L.marker(ll, { title: t('att.youLabel'), keyboard: false, interactive: false,
+        icon: L.divIcon({ className: 'map-you', html: youHtml, iconSize: [32, 32], iconAnchor: [16, 16] }) }).addTo(map);
     } else { youMarker.setLatLng(ll); youAccuracy.setLatLng(ll); youAccuracy.setRadius(pos.accuracy); }
     if (!fitted || force) {
       fitted = true;
@@ -369,13 +424,15 @@ export async function renderAttendance(main, { me, registerCleanup }) {
 
   // ------------------------------------------------------- side sections
   function windowsCard() {
-    const rows = (day.windows || []).map((w) => h('li', { class: 'cluster cluster--between' },
-      h('span', {}, getLang() === 'ar' ? w.label_ar : w.label_en),
-      h('span', { class: 'num' }, `${formatClock(w.start)} – ${formatClock(w.end)}`)));
-    return card({ title: t('att.windows'),
-      subtitle: [t('att.expectedEnd', { time: formatClock(day.expected_end_time) }),
-        day.check_in_closes_at ? t('att.closesAt', { time: formatClock(day.check_in_closes_at) }) : null].filter(Boolean).join(' · '),
-      body: rows.length ? h('ul', { class: 'stack stack--sm', role: 'list' }, rows) : h('p', { class: 'text-sm text-muted' }, t('set.noWindows')) });
+    const rows = (day.windows || []).map((w) => h('li', { class: ['win-row', w.green ? 'win-row--green' : 'win-row--none'] },
+      h('span', { class: 'win-row__dot', 'aria-hidden': 'true' }),
+      h('span', { class: 'win-row__name' }, h('span', { class: 'win-row__label' }, getLang() === 'ar' ? w.label_ar : w.label_en),
+        chip(w.green ? t('att.winGreen') : t('att.winNone'), { tone: w.green ? 'green' : 'neutral' })),
+      h('span', { class: 'win-row__time num' }, h('span', {}, formatClock(w.start)), ' – ', h('span', {}, formatClock(w.end)))));
+    return card({ iconName: 'calendar', title: t('att.windows'),
+      actions: chip(t('att.endOfDay', { time: formatClock(day.expected_end_time) }), { iconName: 'clock', tone: 'neutral' }),
+      body: [rows.length ? h('ul', { class: 'win-list', role: 'list' }, rows) : h('p', { class: 'text-sm text-muted' }, t('set.noWindows')),
+        day.check_in_closes_at ? h('p', { class: 'hint-line' }, icon('lock'), t('att.closesAt', { time: formatClock(day.check_in_closes_at) })) : null] });
   }
 
   function earlyLeaveCard() {
@@ -389,11 +446,17 @@ export async function renderAttendance(main, { me, registerCleanup }) {
         catch (err) { toast({ title: t('error.title'), text: errorMessage(err), tone: 'danger' }); }
         finally { setLoading(cancel, false); }
       } });
-      return card({ title: t('el.title'), body: h('p', {}, t('el.status', { time: formatClock(el.requested_leave_time), status: t(`status.${el.status}`) })), footer: [cancel] });
+      return card({ iconName: 'logOut', title: t('el.title'), actions: chip(t(`status.${el.status}`), { tone: el.status === 'approved' ? 'success' : 'neutral' }),
+        body: h('p', {}, t('el.status', { time: formatClock(el.requested_leave_time), status: t(`status.${el.status}`) })), footer: [cancel] });
     }
     const fTime = input({ label: t('el.time'), type: 'time', required: true, attrs: { dir: 'ltr' } });
-    const fReason = textarea({ label: t('common.reason'), rows: 2, hint: t('common.optional') });
-    const send = button({ label: t('common.submit'), variant: 'secondary', type: 'submit' });
+    fTime.querySelector('.field__label')?.after(chip(t('el.beforeEnd', { time: formatClock(day.work_end_time) }), { tone: 'neutral' }));
+    const fReason = textarea({ label: t('common.reason'), rows: 3, placeholder: t('el.reasonPh') });
+    fReason.querySelector('.field__label')?.after(chip(t('common.optional'), { tone: 'neutral' }));
+    const ta = fReason.querySelector('textarea');
+    const quick = h('div', { class: 'cluster cluster--sm' }, ['el.q1', 'el.q2', 'el.q3'].map((k) =>
+      h('button', { type: 'button', class: 'chip chip--neutral chip--btn', onClick: () => { ta.value = t(k); ta.focus(); } }, t(k))));
+    const send = button({ label: t('el.send'), variant: 'primary', size: 'lg', block: true, icon: 'send', type: 'submit' });
     let sending = false;
     const form = h('form', { class: 'stack', novalidate: true, onSubmit: async (e) => {
       e.preventDefault();
@@ -401,11 +464,11 @@ export async function renderAttendance(main, { me, registerCleanup }) {
       const v = fTime.querySelector('input').value;
       if (!v) { setFieldError(fTime, t('err.invalid_time')); return; }
       setFieldError(fTime, null); sending = true; setLoading(send, true);
-      try { await api('request_early_leave', { leave_time: v, reason: fReason.querySelector('textarea').value }); toast({ title: t('el.sent'), tone: 'success' }); load({ quiet: true }); }
+      try { await api('request_early_leave', { leave_time: v, reason: ta.value }); toast({ title: t('el.sent'), tone: 'success' }); load({ quiet: true }); }
       catch (err) { setFieldError(fTime, errorMessage(err)); }
       finally { sending = false; setLoading(send, false); }
-    } }, h('div', { class: 'form-grid' }, fTime, fReason), h('div', {}, send));
-    return card({ title: t('el.title'), body: form });
+    } }, fTime, fReason, quick, send);
+    return card({ iconName: 'logOut', title: t('el.title'), actions: chip(t('el.notify'), { tone: 'neutral' }), body: form, className: 'el-card' });
   }
 
   load();

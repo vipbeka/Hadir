@@ -1,22 +1,28 @@
-// Staff Home: welcome, today's status, month stats, points, reward progress.
+// Staff Home: greeting hero, today's status (with the real check-in
+// closing time), month stats and this month's point counters.
 import { h, add, fill } from '../../core/dom.js';
 import { t, setDocumentTitle, getLang } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
 import { errorMessage } from '../../core/errors.js';
-import { displayName, formatTime, formatMinutes, jobTitle, formatEGP } from '../../core/format.js';
+import { displayName, formatTime, formatClock, formatMinutes, formatLongDate, jobTitle } from '../../core/format.js';
 import { pageHeader } from '../../shell/shell.js';
-import { card, stat, badge, progress, alert, emptyState, skeletonCard } from '../../ui/display.js';
+import { card, chip, statCard, progress, alert, emptyState, skeletonCard } from '../../ui/display.js';
 import { button } from '../../ui/button.js';
+import { icon } from '../../ui/icons.js';
 import { installBanner } from '../../ui/install.js';
 import { pushCard } from '../../ui/push-card.js';
 import { navigate } from '../../core/router.js';
 
-export function pointsBadges(tot) {
-  return h('div', { class: 'cluster cluster--sm' },
-    badge(`${tot.green} · ${t('points.green')}`, { tone: 'point-green', dot: true, size: 'lg' }),
-    badge(`${tot.red} · ${t('points.red')}`, { tone: 'point-red', dot: true, size: 'lg' }),
-    badge(`${tot.black} · ${t('points.black')}`, { tone: 'point-black', dot: true, size: 'lg' }));
+/** Three counters (green / red / black) used on Home and Points. */
+export function pointCounters(tot) {
+  const c = (cls, n, label) => h('div', { class: `counter counter--${cls}` },
+    h('span', { class: 'counter__value num' }, String(n ?? 0)),
+    h('span', { class: 'counter__label' }, h('span', { class: 'chip__dot', 'aria-hidden': 'true' }), label));
+  return h('div', { class: 'counter-row' },
+    c('green', tot.green, t('points.green')), c('red', tot.red, t('points.red')), c('black', tot.black, t('points.black')));
 }
+// kept for other pages that import it
+export const pointsBadges = pointCounters;
 
 export function rewardProgress(sum) {
   const g = Math.max(0, sum.period_totals.green), th = sum.threshold;
@@ -24,31 +30,56 @@ export function rewardProgress(sum) {
     hint: g >= th ? t('reward.reached') : t('reward.remaining', { n: th - g }) });
 }
 
+function cairoHour(iso) {
+  return Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Africa/Cairo' }).format(iso ? new Date(iso) : new Date()));
+}
+
 export async function renderStaffHome(main, { me }) {
   setDocumentTitle(t('nav.home'));
-  add(main, pageHeader({ eyebrow: jobTitle(me) || t('role.staff'), title: t('shell.welcome', { name: displayName(me) }) }),
-    installBanner(), pushCard(me));
+  const greetHost = h('div', { class: 'hero-greet' }, icon('hand'), t(cairoHour() < 12 ? 'home.greetMorning' : 'home.greetEvening'));
+  add(main, pageHeader({
+    chips: [chip(t('role.staff'), { dot: true }), jobTitle(me) ? chip(jobTitle(me), { tone: 'neutral' }) : null],
+    title: t('shell.welcome', { name: displayName(me) }), subtitle: t('home.tagline'), aside: greetHost }),
+  installBanner(), pushCard(me));
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, body);
   try {
     const [day, sum] = await Promise.all([api('my_day'), api('my_summary')]);
+    fill(greetHost, icon('hand'), t(cairoHour(day.server_now) < 12 ? 'home.greetMorning' : 'home.greetEvening'));
     const a = day.attendance;
-    let todayText; let action = null;
-    if (day.holiday) todayText = t('home.holiday', { name: getLang() === 'ar' ? day.holiday.name_ar : day.holiday.name_en });
-    else if (!day.is_work_day) todayText = t('home.dayOff');
-    else if (a?.checked_out_at) todayText = `${t('home.checkedInAt', { time: formatTime(a.checked_in_at) })} · ${t('home.checkedOutAt', { time: formatTime(a.checked_out_at) })}`;
-    else if (a?.checked_in_at) { todayText = t('home.checkedInAt', { time: formatTime(a.checked_in_at) }); action = button({ label: t('att.checkOut'), variant: 'primary', icon: 'mapPin', onClick: () => navigate('/staff/attendance') }); }
-    else { todayText = t('home.notCheckedIn'); action = day.check_in_enabled ? button({ label: t('home.goCheckIn'), variant: 'primary', icon: 'mapPin', onClick: () => navigate('/staff/attendance') }) : null; }
-    fill(body, 
-      card({ facet: true, title: t('home.today'), subtitle: day.business_date, body: h('p', { class: 'stat__value', style: { 'font-size': 'var(--font-size-xl)' } }, todayText), footer: action ? [action] : null }),
+    const goBtn = (label) => button({ label, variant: 'primary', size: 'lg', block: true, iconEnd: 'arrowRight', onClick: () => navigate('/staff/attendance') });
+    // one status decision for the "today" card
+    let st; let title; let sub = null; let ico; let action = null;
+    if (day.holiday) { st = chip(t('home.stHoliday'), { tone: 'accent' }); ico = 'calendar'; title = t('home.holiday', { name: getLang() === 'ar' ? day.holiday.name_ar : day.holiday.name_en }); }
+    else if (!day.is_work_day) { st = chip(t('home.stOff'), { tone: 'neutral' }); ico = 'calendar'; title = t('home.dayOff'); }
+    else if (a?.checked_out_at) {
+      st = chip(t('home.stOut'), { tone: 'success', dot: true }); ico = 'checkCircle'; title = t('home.outTitle');
+      sub = `${t('home.checkedInAt', { time: formatTime(a.checked_in_at) })} · ${t('home.checkedOutAt', { time: formatTime(a.checked_out_at) })}`;
+    } else if (a?.checked_in_at) {
+      st = chip(t('home.stIn'), { tone: 'success', dot: true }); ico = 'clock'; title = t('home.checkedInAt', { time: formatTime(a.checked_in_at) });
+      sub = t('home.inSub', { time: formatClock(day.expected_end_time) }); action = goBtn(t('att.checkOut'));
+    } else if (day.check_in_closed) {
+      st = chip(t('home.stClosed'), { tone: 'warning', dot: true }); ico = 'clockOff'; title = t('home.notCheckedIn');
+      sub = t('home.closedSub', { time: formatClock(day.check_in_closes_at) });
+    } else {
+      st = chip(t('home.stPending'), { dot: true }); ico = 'clockOff'; title = t('home.notCheckedIn');
+      sub = day.check_in_closes_at ? t('home.availableUntil', { time: formatClock(day.check_in_closes_at) }) : null;
+      action = day.check_in_enabled ? goBtn(t('home.goCheckIn')) : null;
+    }
+    fill(body,
+      card({ iconName: 'calendarCheck', title: t('home.todayDate', { date: formatLongDate(day.business_date) }), actions: st, className: 'today-card',
+        body: [h('div', { class: 'today-box' },
+          h('span', { class: 'today-box__icon', 'aria-hidden': 'true' }, icon(ico)),
+          h('div', { class: 'today-box__text' }, h('p', { class: 'today-box__title' }, title), sub ? h('p', { class: 'today-box__sub' }, sub) : null)),
+        action] }),
       sum.pending_black > 0 ? alert(t('home.pendingBlack', { n: sum.pending_black }), { tone: 'warning' }) : null,
       day.missing_checkouts > 0 ? alert(t('home.missingCheckouts', { n: day.missing_checkouts }), { tone: 'info' }) : null,
-      h('div', { class: 'grid-auto' },
-        card({ body: stat({ label: t('design.statDays'), value: String(sum.days_present), meta: t('design.statMeta') }) }),
-        card({ body: stat({ label: t('design.statHours'), value: formatMinutes(sum.worked_minutes), meta: t('design.statMeta') }) }),
-        card({ title: t('pts.period'), body: pointsBadges(sum.period_totals) })),
-      card({ body: [rewardProgress(sum), h('p', { class: 'text-sm text-muted' }, formatEGP(sum.reward_amount_piastres))],
-        footer: [button({ label: t('pts.title'), variant: 'secondary', iconEnd: 'arrowRight', onClick: () => navigate('/staff/points') })] }));
+      h('div', { class: 'stat-pair' },
+        statCard({ label: t('design.statDays'), iconName: 'calendarCheck', value: String(sum.days_present), unit: t('home.daysUnit'), meta: t('design.statMeta'), metaIcon: 'checkCircle' }),
+        statCard({ label: t('home.hoursTitle'), iconName: 'clock', value: formatMinutes(sum.worked_minutes), meta: t('design.statMeta'), metaIcon: 'activity' })),
+      card({ iconName: 'trophy', title: t('home.pointsLog'), actions: chip(t('home.live'), { tone: 'neutral' }),
+        body: [pointCounters(sum.period_totals),
+          h('a', { class: 'tip-row', href: '#/staff/points' }, icon('bulb'), h('span', { class: 'tip-row__text' }, t('home.tip')), icon('chevronRight', { flip: true }))] }));
   } catch (err) {
     fill(body, emptyState({ iconName: 'alertTriangle', title: t('error.title'), text: errorMessage(err), error: true }));
   }

@@ -52,6 +52,12 @@ export function formatDate(iso, lang = getLang()) {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? new Date(`${iso}T12:00:00Z`) : new Date(iso);
   return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { dateStyle: 'medium', timeZone: TZ }).format(d);
 }
+/** "23 نوفمبر 2026" / "23 November 2026" (Cairo calendar day) */
+export function formatLongDate(iso, lang = getLang()) {
+  if (!iso) return '';
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? new Date(`${iso}T12:00:00Z`) : new Date(iso);
+  return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: TZ }).format(d);
+}
 export function formatDateTime(iso, lang = getLang()) {
   if (!iso) return '';
   return `${formatDate(iso, lang)}، ${formatTime(iso, lang)}`.replace('، ', lang === 'ar' ? '، ' : ', ');

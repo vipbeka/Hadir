@@ -17,7 +17,7 @@ const ctxOpts = (geo, perms = ['geolocation']) => ({ viewport: { width: 390, hei
   await uiLogin(page, base, '12345678'); await page.waitForFunction(() => location.hash === '#/staff/home');
   await page.goto(`${base}/index.html#/staff/attendance`); await page.waitForSelector('.att-geo--success', { timeout: 10000 });
   check(/LOCATION VERIFIED/.test(await page.textContent('.att-geo')), 'inside the geofence → "LOCATION VERIFIED"');
-  const btn = page.locator('.att-card .btn--primary');
+  const btn = page.locator('.att-action .btn--primary');
   check(!(await btn.isDisabled()), 'check-in button enabled inside the area');
   await btn.click(); await page.waitForSelector('.toast');
   check(/green point/i.test(await page.textContent('.toast-region')), 'check-in confirms only after the server answers (green point)');
@@ -44,8 +44,8 @@ const ctxOpts = (geo, perms = ['geolocation']) => ({ viewport: { width: 390, hei
   await installMock(ctx); const page = await ctx.newPage();
   await uiLogin(page, base, '12345678'); await page.waitForFunction(() => location.hash === '#/staff/home');
   await page.goto(`${base}/index.html#/staff/attendance`); await page.waitForSelector('.att-geo--danger', { timeout: 10000 });
-  check(/Outside the area — \d+ m away/.test(await page.textContent('.att-geo')), 'outside → distance shown');
-  check(await page.locator('.att-card .btn--primary').isDisabled(), 'check-in disabled outside the area');
+  check(/Outside the area — [\d,]+ m away/.test(await page.textContent('.att-geo')), 'outside → distance shown');
+  check(await page.locator('.att-action .btn--primary').isDisabled(), 'check-in disabled outside the area');
   await ctx.close();
   const ctx2 = await browser.newContext(ctxOpts(undefined, []));
   await ctx2.addInitScript(() => localStorage.setItem('zh.lang', 'en'));
