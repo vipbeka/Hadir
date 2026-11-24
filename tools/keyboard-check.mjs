@@ -36,7 +36,7 @@ for (const lang of ['ar', 'en']) {
   check(await page.evaluate(() => document.activeElement?.name === 'code'), `[${lang}] login autofocuses the code field`);
   check(await page.evaluate(() => { const i = document.querySelector('input[name=code]'); return i.inputMode === 'numeric' && i.autocomplete === 'off'; }), `[${lang}] code field uses numeric keypad, autocomplete off`);
   await page.keyboard.press('Enter');
-  check(await page.evaluate(() => !document.querySelector('.field__error').hidden), `[${lang}] empty submit shows inline error`);
+  check(await page.evaluate(() => !!document.querySelector('.cp-status--err')), `[${lang}] empty submit shows inline error`);
   await page.keyboard.type('12ab34');
   check(await page.evaluate(() => document.querySelector('input[name=code]').value === '1234'), `[${lang}] non-digits stripped`);
   const walk = await tabWalk(page, 8);

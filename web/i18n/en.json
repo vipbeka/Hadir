@@ -1052,5 +1052,11 @@
   "err.immutable_record": "Financial records are never edited; use a reversal.",
   "err.pdf_assets": "Couldn't load the font or logo the file needs. Check the connection and retry.",
   "err.pdf_invalid": "The generated file was invalid and was not offered. Retry or use Print.",
-  "ps.times": "{n} × {rate}"
+  "ps.times": "{n} × {rate}",
+  "login.padIdle": "Enter your code on the keypad",
+  "login.padOk": "Verified — signing in…",
+  "login.padBack": "Delete digit (hold to clear)",
+  "login.padShow": "Show code",
+  "login.padHide": "Hide code",
+  "login.padLabel": "Number pad"
 }
