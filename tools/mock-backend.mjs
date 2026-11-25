@@ -306,7 +306,15 @@ export async function installMock(context, state = {}) {
       if (req.method() === 'HEAD') return route.fulfill({ status: 200, headers: { ...cors, 'content-range': `*/${rows.length}`, 'access-control-expose-headers': 'content-range' } });
       return json(200, rows.slice(0, 200));
     }
-    if (tname === 'push_subscriptions') { (state.pushCalls ??= []).push({ method: req.method(), body }); return req.method() === 'DELETE' ? route.fulfill({ status: 204, headers: cors }) : json(201, []); }
+    if (tname === 'push_subscriptions') {
+      (state.pushCalls ??= []).push({ method: req.method(), body });
+      const rows = (state.pushRows ??= []);
+      const q = url.searchParams; const eqv = (k) => (q.get(k) || '').replace(/^eq\./, '');
+      if (req.method() === 'GET') return json(200, rows.filter((r) => (!q.get('endpoint') || r.endpoint === eqv('endpoint')) && (!q.get('employee_id') || r.employee_id === eqv('employee_id'))).map((r) => ({ id: r.id })));
+      if (req.method() === 'DELETE') { state.pushRows = rows.filter((r) => r.endpoint !== eqv('endpoint')); return route.fulfill({ status: 204, headers: cors }); }
+      for (const b of [].concat(body || [])) { state.pushRows = rows.filter((r) => r.endpoint !== b.endpoint); state.pushRows.push({ id: rows.length + 1, ...b }); }
+      return json(201, []);
+    }
     if (url.pathname === '/functions/v1/owner-employees') {
       if (!sessionOk) return json(401, { error: 'unauthorized' });
       if (who.role !== 'owner') return json(403, { error: 'forbidden' });

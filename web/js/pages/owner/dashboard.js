@@ -8,12 +8,14 @@ import { pageHeader } from '../../shell/shell.js';
 import { card, stat, badge, table, emptyState, skeletonCard } from '../../ui/display.js';
 import { button } from '../../ui/button.js';
 import { installBanner } from '../../ui/install.js';
+import { pushCard } from '../../ui/push-card.js';
 import { navigate } from '../../core/router.js';
 
 export async function renderOwnerDashboard(main, { me }) {
   setDocumentTitle(t('od.title'));
   add(main, pageHeader({ iconName: 'grid', eyebrow: t('shell.welcome', { name: displayName(me) }), title: t('od.title'),
-    actions: [button({ label: t('common.refresh'), icon: 'clock', onClick: () => load() })] }), installBanner());
+    actions: [button({ label: t('common.refresh'), icon: 'clock', onClick: () => load() })] }), installBanner(),
+    pushCard(me, { title: t('opush.title'), text: t('opush.text'), dismissKey: 'zh.ownerPushDismissed' }));
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, body);
   async function load() {

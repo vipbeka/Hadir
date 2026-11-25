@@ -16,16 +16,16 @@ import { errorMessage } from '../core/errors.js';
  * Rendering is generation-guarded: overlapping async renders (initial +
  * after enabling) can never append two copies.
  */
-export function pushCard(me, { dismissible = true, compact = false } = {}) {
+export function pushCard(me, { dismissible = true, compact = false, title = t('push.title'), text = t('push.text'), dismissKey = 'zh.pushDismissed' } = {}) {
   const host = h('div', { class: 'install-slot' });
   let generation = 0;
   const render = async () => {
     const gen = ++generation;
-    const st = await pushStatus();
+    const st = await pushStatus(me?.id);
     if (gen !== generation) return;          // a newer render superseded this one
     fill(host);
     if (st === 'enabled') { if (!dismissible) add(host, alert(t('push.enabled'), { tone: 'success' })); return; }
-    if (dismissible && store.get('zh.pushDismissed') === '1') return;
+    if (dismissible && store.get(dismissKey) === '1') return;
     if (st === 'unsupported') { if (!dismissible) add(host, alert(t('push.unsupported'), { tone: 'info' })); return; }
     if (st === 'denied') { add(host, alert(t('push.denied'), { tone: 'warning' })); return; }
     const btn = button({ label: t('push.enable'), variant: 'primary', size: 'sm', icon: 'bell', onClick: async () => {
@@ -39,9 +39,9 @@ export function pushCard(me, { dismissible = true, compact = false } = {}) {
     if (compact) { add(host, h('div', {}, btn)); return; }
     add(host, h('section', { class: 'install-card' },
       h('span', { class: 'empty__icon install-card__badge' }, icon('bell')),
-      h('div', { class: 'install-card__text' }, h('p', { class: 'install-card__title' }, t('push.title')), h('p', { class: 'text-sm text-muted' }, t('push.text'))),
+      h('div', { class: 'install-card__text' }, h('p', { class: 'install-card__title' }, title), h('p', { class: 'text-sm text-muted' }, text)),
       h('div', { class: 'install-card__actions' }, btn,
-        dismissible ? button({ label: t('push.dismiss'), variant: 'ghost', size: 'sm', onClick: () => { store.set('zh.pushDismissed', '1'); render(); } }) : null)));
+        dismissible ? button({ label: t('push.dismiss'), variant: 'ghost', size: 'sm', onClick: () => { store.set(dismissKey, '1'); render(); } }) : null)));
   };
   render();
   return host;

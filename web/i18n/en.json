@@ -386,6 +386,8 @@
   "req.empty": "No requests yet.",
   "req.cancelled": "Cancelled.",
   "req.ownerComment": "Owner's comment: {c}",
+  "opush.title": "Owner alerts on this device",
+  "opush.text": "Turn them on to get an instant alert on this device for every check-in, check-out, absence and request — even with the app closed.",
   "push.title": "Shift reminders",
   "push.text": "Get notified before work starts and ends, and before a check-in window closes — even with the app closed.",
   "push.enable": "Enable notifications",

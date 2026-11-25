@@ -39,6 +39,10 @@ export function renderAccount(main, { me, onSignOut }) {
   }
 
   if (me.role === 'owner') {
+    add(main, card({ title: t('opush.title'), body: [h('p', { class: 'text-sm text-muted' }, t('opush.text')), pushCard(me, { dismissible: false, compact: true })] }));
+  }
+
+  if (me.role === 'owner') {
     const regen = button({ label: t('emp.regenerate'), variant: 'secondary', icon: 'lock', onClick: async () => {
       if (!(await confirmDialog({ title: t('emp.regenerate'), text: t('emp.regenerateOwnConfirm'), confirmLabel: t('emp.regenerate'), variant: 'danger' }))) return;
       setLoading(regen, true, t('common.saving'));

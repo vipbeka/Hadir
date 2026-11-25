@@ -65,7 +65,7 @@ export async function renderOwnerAlerts(slot, { me } = {}) {
   // ---- this device (Web Push)
   const devBox = h('div', { class: 'notify-status' });
   const renderDevice = async () => {
-    const s = await pushStatus();
+    const s = await pushStatus(me?.id);
     const guide = h('ul', { class: 'text-sm text-muted' }, h('li', {}, t('oa.guideIos')), h('li', {}, t('oa.guideAndroid')));
     const devices = h('p', { class: 'text-sm text-muted' }, t('oa.devices', { n: st.push_devices }));
     if (s === 'enabled') {

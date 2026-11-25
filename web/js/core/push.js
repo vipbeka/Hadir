@@ -1,4 +1,4 @@
-// Web Push subscription for staff shift reminders. The browser only
+// Web Push subscription (staff shift reminders, owner live alerts). The browser only
 // registers ITS OWN device subscription (RLS: own rows). Sending happens
 // server-side (dispatch Edge Function) so reminders arrive with the app
 // and browser closed. Never prompts for permission on page load.
@@ -14,15 +14,25 @@ function keyToBytes(b64) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
-/** 'unsupported' | 'denied' | 'enabled' | 'off' */
-export async function pushStatus() {
+/** Is this browser subscription saved for THIS person? (A browser shared by
+ *  two accounts — e.g. the owner testing on a staff device — keeps one
+ *  subscription; it only counts for the account it is registered to.) */
+async function isMine(endpoint, employeeId) {
+  if (!employeeId) return true;
+  const { data, error } = await sb.from('push_subscriptions').select('id').eq('endpoint', endpoint).eq('employee_id', employeeId).eq('enabled', true).limit(1);
+  return !error && !!data?.length;
+}
+
+/** 'unsupported' | 'denied' | 'enabled' | 'off' (for the signed-in person when employeeId is given) */
+export async function pushStatus(employeeId) {
   if (!supported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
   if (Notification.permission !== 'granted') return 'off';
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     const sub = await reg?.pushManager.getSubscription();
-    return sub ? 'enabled' : 'off';
+    if (!sub) return 'off';
+    return (await isMine(sub.endpoint, employeeId)) ? 'enabled' : 'off';
   } catch { return 'off'; }
 }
 
@@ -32,6 +42,8 @@ export async function enablePush(employeeId) {
   if (perm !== 'granted') return perm === 'denied' ? 'denied' : 'off';
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
+  // registered to another account on this browser → start a fresh one for this person
+  if (sub && !(await isMine(sub.endpoint, employeeId))) { await sub.unsubscribe().catch(() => {}); sub = null; }
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyToBytes(VAPID_PUBLIC_KEY) });
   const j = sub.toJSON();
   const ua = navigator.userAgent;
