@@ -52,8 +52,23 @@ const egp = (p: number) => `${(Number(p) / 100).toLocaleString("en-US")} ج.م`;
 export const esc = (s: unknown) => String(s ?? "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!));
 
 /** Owner messages (Arabic, with the product name). Never contains codes or salary. */
+export const APP_URL = "https://hadar-ee191.web.app/";
+const ICON: Record<string, string> = { check_in: "✅", red_point: "⏰", check_out: "🏁", black_pending: "⚫",
+  leave_request: "🌴", early_leave_request: "🕒", reward_request: "🏆" };
+
 export function formatOwnerMessage(p: Record<string, unknown>): { text: string; reply_markup?: unknown } {
   const head = `<b>${APP}</b>\n`;
+  // Live employee events: the text is built once in the database (same
+  // wording as the in-app notification and the device push).
+  if (typeof p.text_ar === "string" && p.text_ar) {
+    const [title, ...rest] = p.text_ar.split("\n");
+    const text = `${head}${ICON[String(p.kind)] ?? "🔔"} <b>${esc(title)}</b>\n${esc(rest.join("\n"))}`;
+    const rows: unknown[][] = [];
+    if (p.kind === "early_leave_request" && p.id != null) rows.push([{ text: "✅ قبول", callback_data: `el:a:${p.id}` }, { text: "❌ رفض", callback_data: `el:r:${p.id}` }]);
+    if (p.kind === "leave_request" && p.status === "pending" && typeof p.id === "string") rows.push([{ text: "✅ قبول", callback_data: `lv:a:${p.id}` }, { text: "❌ رفض", callback_data: `lv:r:${p.id}` }]);
+    if (typeof p.link === "string" && p.link.startsWith("#/owner/")) rows.push([{ text: "📱 فتح في التطبيق", url: `${APP_URL}${p.link}` }]);
+    return { text, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
+  }
   const lines = (arr: unknown) => (Array.isArray(arr) ? arr.map((l: Record<string, unknown>) => `• ${esc(l.line)}`).join("\n") : "");
   switch (p.kind) {
     case "red_point":

@@ -38,6 +38,9 @@ const ACTIONS: Record<string, [string, Role]> = {
   payroll_v2: ["svc_payroll_v2", "owner"], payslip: ["svc_payslip", "owner"], payslip_finalize: ["svc_payslip_finalize", "owner"],
   salary_payment_record: ["svc_salary_payment_record", "owner"], salary_payment_reverse: ["svc_salary_payment_reverse", "owner"],
   employee_statement: ["svc_employee_statement", "owner"],
+  // live owner notifications (Telegram + in-app + device push)
+  owner_alert_prefs: ["svc_owner_alert_prefs", "owner"], notify_status: ["svc_owner_notify_status", "owner"],
+  notify_test: ["svc_owner_notify_test", "owner"], notify_log: ["svc_owner_notify_log", "owner"],
 };
 
 serve(async (req, body) => {

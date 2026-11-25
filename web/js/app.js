@@ -28,6 +28,8 @@ import { renderApprovals } from './pages/owner/approvals.js';
 import { renderPayroll } from './pages/owner/payroll.js';
 import { renderHolidays } from './pages/owner/holidays.js';
 import { renderSettings } from './pages/owner/settings.js';
+import { renderNotifications } from './pages/owner/notifications.js';
+import { startOwnerLive, stopOwnerLive } from './core/owner-live.js';
 import { renderStaffAnnouncements, renderOwnerAnnouncements } from './pages/announcements.js';
 import { renderPayslip } from './pages/owner/payslip.js';
 import { renderEmployee } from './pages/owner/employee.js';
@@ -57,6 +59,7 @@ const PAGES = {
   '/owner/payroll': renderPayroll,
   '/owner/holidays': renderHolidays,
   '/owner/settings': renderSettings,
+  '/owner/notifications': renderNotifications,
   '/owner/account': renderAccount,
 };
 
@@ -70,6 +73,7 @@ const runCleanups = () => {
 const registerCleanup = (fn) => cleanups.push(fn);
 
 async function doSignOut(notice = 'login.signedOut') {
+  stopOwnerLive();
   await signOut();
   me = null;
   loginNotice = notice;
@@ -90,7 +94,8 @@ function mountTree(nav) {
       if (redirect) { navigate(redirect, { replace: true }); return; }
       const user = { name: displayName(me), roleKey: `role.${me.role}` };
       const { main } = renderShell(root, { nav, currentPath: path, user, onSignOut: () => doSignOut() });
-      const page = PAGES[path];
+      if (me.role === 'owner') startOwnerLive();
+      const page = PAGES[path.split('?')[0]];
       if (page) page(main, { me, onSignOut: () => doSignOut(), registerCleanup });
       else renderPlaceholder(main, { item, user, isHome: idx === 0 });
       window.scrollTo(0, 0);
@@ -193,7 +198,7 @@ async function boot() {
   // Server-side revocation/deactivation: refresh fails or RLS returns no
   // profile → back to the login screen with a calm message.
   onAuthChange(async (event) => {
-    if (event === 'SIGNED_OUT' && me) { me = null; loginNotice = 'login.sessionEnded'; navigate('/login', { replace: true }); }
+    if (event === 'SIGNED_OUT' && me) { stopOwnerLive(); me = null; loginNotice = 'login.sessionEnded'; navigate('/login', { replace: true }); }
   });
   window.addEventListener('focus', async () => {
     if (!me) return;

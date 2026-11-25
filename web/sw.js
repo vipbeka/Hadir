@@ -9,14 +9,14 @@
  * - Web Push handlers are added in Step 5 (shift reminders).
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'zh-v10';
+const VERSION = 'zh-v11';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const PRECACHE = [
   './', './index.html', './offline.html', './manifest.webmanifest', './favicon.ico',
   './css/tokens.css', './css/base.css', './css/components.css', './css/shell.css', './css/pages.css', './css/watch.css',
   './js/boot.js', './js/app.js', './js/config.js',
-  './js/core/api.js', './js/core/auth.js', './js/core/dom.js', './js/core/errors.js', './js/core/format.js',
+  './js/core/api.js', './js/core/auth.js', './js/core/owner-live.js', './js/core/dom.js', './js/core/errors.js', './js/core/format.js',
   './js/core/i18n.js', './js/core/pwa.js', './js/core/push.js', './js/core/router.js', './js/core/storage.js', './js/core/supabase.js', './js/core/theme.js',
   './js/ui/brand.js', './js/ui/button.js', './js/ui/code-dialog.js', './js/ui/display.js', './js/ui/field.js',
   './js/ui/icons.js', './js/ui/install.js', './js/ui/modal.js', './js/ui/prefs.js', './js/ui/push-card.js', './js/ui/toast.js', './js/ui/watch.js',
@@ -26,6 +26,7 @@ const PRECACHE = [
   './js/pages/owner/employees.js', './js/pages/owner/dashboard.js', './js/pages/owner/approvals.js', './js/pages/owner/payroll.js', './js/pages/owner/payroll-export.js',
   './js/pages/owner/holidays.js', './js/pages/owner/settings.js', './js/pages/announcements.js',
   './js/pages/owner/docs.js', './js/pages/owner/payslip.js', './js/pages/owner/employee.js', './js/pages/owner/pay-actions.js', './js/pages/owner/delete-employee.js',
+  './js/pages/owner/notifications.js', './js/pages/owner/owner-alerts.js',
   './vendor/leaflet-1.9.4/leaflet.js', './vendor/leaflet-1.9.4/leaflet.css',
   './i18n/ar.json', './i18n/en.json',
   './vendor/supabase-js-2.119.2/supabase.js',
@@ -65,9 +66,11 @@ self.addEventListener('push', (event) => {
     dir: data.lang === 'en' ? 'ltr' : 'rtl',
     icon: './assets/icons/icon-192.png',
     badge: './assets/icons/favicon-32.png',
-    tag: data.kind || 'zintra',
+    tag: data.tag || data.kind || 'zintra',
     renotify: true,
-    data: { url: data.kind === 'early_leave_decision' ? './index.html#/staff/requests' : './index.html#/staff/attendance' },
+    // owner notifications carry their own in-app link (same origin only)
+    data: { url: typeof data.url === 'string' && data.url.startsWith('./index.html#/') ? data.url
+      : data.kind === 'early_leave_decision' ? './index.html#/staff/requests' : './index.html#/staff/attendance' },
   }));
 });
 

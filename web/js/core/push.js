@@ -43,3 +43,20 @@ export async function enablePush(employeeId) {
   if (error) throw error;
   return 'enabled';
 }
+
+/** Turn push off on THIS device only (browser subscription + its row). */
+export async function disablePush() {
+  if (!supported()) return 'unsupported';
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return 'off';
+  const endpoint = sub.endpoint;
+  await sub.unsubscribe().catch(() => {});
+  const { error } = await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+  if (error) throw error;
+  return 'off';
+}
+
+/** iPhone/iPad Safari outside the installed Home Screen app (no Web Push there). */
+export const iosNeedsInstall = () => /iPhone|iPad|iPod/.test(navigator.userAgent)
+  && !(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true);

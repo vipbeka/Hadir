@@ -385,3 +385,51 @@ body[data-role="owner"] { --col-width: 64rem; }
 @media (prefers-reduced-motion: reduce) {
   .cp-box--pop, .cp-key--press, .cp--shake, .cp-status--busy .cp-dot, .cp-box--active:not(.cp-box--filled)::after { animation: none; }
 }
+
+/* ============ Owner notifications: header bell + list ============ */
+.topbar__actions { display: flex; align-items: center; gap: var(--space-2); }
+.topbar__bell { position: relative; border-radius: var(--radius-pill); text-decoration: none; }
+.topbar__bell[aria-current="page"] { background: var(--color-primary-subtle); color: var(--color-primary-text); }
+.bell__badge {
+  position: absolute; inset-block-start: calc(-1 * var(--space-1)); inset-inline-end: calc(-1 * var(--space-1));
+  min-inline-size: 1.25rem; block-size: 1.25rem; padding-inline: var(--space-1);
+  display: grid; place-items: center;
+  border-radius: var(--radius-pill); border: 2px solid var(--color-surface);
+  background: var(--color-danger); color: var(--color-text-on-primary);
+  font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); line-height: 1;
+}
+.bell__badge[hidden] { display: none; }
+.toast__body--action { all: unset; flex: 1; min-inline-size: 0; cursor: pointer; display: flex; flex-direction: column; gap: var(--space-1); }
+.toast__body--action:focus-visible { outline: none; box-shadow: var(--focus-shadow); border-radius: var(--radius-sm); }
+
+.notif-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.notif-list { display: flex; flex-direction: column; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
+.notif {
+  display: flex; gap: var(--space-3); align-items: flex-start; inline-size: 100%;
+  padding: var(--space-3) var(--space-4); text-align: start;
+  border: 1px solid var(--color-card-border); border-radius: var(--radius-lg);
+  background: var(--color-surface); color: var(--color-text); cursor: pointer;
+  font: inherit;
+}
+.notif:hover { border-color: var(--color-border-strong); }
+.notif:focus-visible { outline: none; box-shadow: var(--focus-shadow); }
+.notif--unread { background: var(--color-primary-subtle); border-color: var(--color-primary); }
+.notif--hl { box-shadow: var(--focus-shadow); }
+.notif__icon { flex: none; display: grid; place-items: center; inline-size: 2.5rem; block-size: 2.5rem; border-radius: var(--radius-pill); background: var(--color-surface-sunken); color: var(--color-text-muted); }
+.notif__icon--check_in { color: var(--color-success); background: var(--color-success-subtle); }
+.notif__icon--absence { color: var(--color-danger); background: var(--color-danger-subtle); }
+.notif__icon--request { color: var(--color-primary-text); background: var(--color-primary-subtle); }
+.notif__main { flex: 1; min-inline-size: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.notif__head { display: flex; justify-content: space-between; gap: var(--space-2); align-items: baseline; flex-wrap: wrap; }
+.notif__title { font-weight: var(--font-weight-semibold); }
+.notif__time { font-size: var(--font-size-xs); color: var(--color-text-muted); white-space: nowrap; }
+.notif__body { white-space: pre-line; font-size: var(--font-size-sm); color: var(--color-text); overflow-wrap: anywhere; }
+.notif__dot { flex: none; inline-size: 0.6rem; block-size: 0.6rem; margin-block-start: var(--space-2); border-radius: var(--radius-pill); background: var(--color-primary); }
+
+.alert-grid { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, auto); gap: var(--space-2) var(--space-3); align-items: center; }
+.alert-grid__head { font-size: var(--font-size-xs); color: var(--color-text-muted); text-align: center; }
+.alert-grid__type { font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); }
+.alert-grid .switch { position: relative; justify-content: center; min-block-size: 2.75rem; }
+.alert-grid .switch > span:last-child { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.notify-status { display: flex; flex-direction: column; gap: var(--space-2); }
+.notify-log { font-size: var(--font-size-xs); }

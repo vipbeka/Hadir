@@ -9,6 +9,7 @@ import { button } from '../ui/button.js';
 import { wordmark } from '../ui/brand.js';
 import { langSwitcher, themeToggle } from '../ui/prefs.js';
 import { installButton } from '../ui/install.js';
+import { bindBadge } from '../core/owner-live.js';
 
 function navLink(item, currentPath, cls, { labelKey, iconName } = {}) {
   const active = currentPath.split('?')[0] === item.path;
@@ -77,11 +78,18 @@ export function renderShell(root, { nav, currentPath, user, onSignOut, role }) {
   setOnline();
   window.addEventListener('online', setOnline);
   window.addEventListener('offline', setOnline);
+  // owner: notifications bell with the unread count (live, see owner-live.js)
+  const isOwner = document.body.dataset.role === 'owner';
+  const badge = isOwner ? h('span', { class: 'bell__badge num', 'aria-hidden': 'true', hidden: true }) : null;
+  const bell = isOwner ? h('a', { class: 'btn btn--secondary btn--icon topbar__bell', href: '#/owner/notifications', 'aria-label': t('notif.bell'),
+    'aria-current': currentPath.split('?')[0] === '/owner/notifications' ? 'page' : null }, icon('bell'), badge) : null;
   const topbar = h('header', { class: 'topbar' },
     h('div', { class: 'topbar__inner' },
       wordmark({ href: `#${nav[0].path}` }),
       online,
-      button({ label: t('common.menu'), variant: 'secondary', icon: 'menu', iconOnly: true, attrs: { class: 'topbar__menu' }, onClick: openDrawer })));
+      h('div', { class: 'topbar__actions' }, bell,
+        button({ label: t('common.menu'), variant: 'secondary', icon: 'menu', iconOnly: true, attrs: { class: 'topbar__menu' }, onClick: openDrawer }))));
+  if (badge) bindBadge(badge);
 
   // ----- floating bottom bar (4 tabs; «المزيد» opens the panel if no 4th tab) -----
   const bottomItems = nav.filter((i) => i.bottom).slice(0, 4);

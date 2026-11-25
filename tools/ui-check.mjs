@@ -31,6 +31,7 @@ const pages = [
   ['owner-employee', '/index.html#/owner/employee?id=00000000-0000-4000-a000-0000000000bb', '87654321'],
   ['owner-holidays', '/index.html#/owner/holidays', '87654321'],
   ['owner-settings', '/index.html#/owner/settings', '87654321'],
+  ['owner-notifications', '/index.html#/owner/notifications', '87654321'],
   ['owner-leaderboard', '/index.html#/owner/leaderboard', '87654321'],
   ['owner-employees', '/index.html#/owner/employees', '87654321'],
   ['owner-employee-dialog', '/index.html#/owner/employees', '87654321'],

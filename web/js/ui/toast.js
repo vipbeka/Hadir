@@ -16,16 +16,18 @@ function ensureRegion() {
 }
 
 /** Build a toast element (also used statically by the design preview). */
-export function toastEl({ title, text, tone = 'info', onDismiss, isStatic = false }) {
+export function toastEl({ title, text, tone = 'info', onDismiss, isStatic = false, onOpen }) {
+  const content = [title ? h('p', { class: 'toast__title' }, title) : null, text ? h('p', { class: 'toast__text' }, text) : null];
   return h('div', { class: ['toast', `toast--${tone}`, isStatic && 'toast--static'], role: tone === 'danger' ? 'alert' : 'status' },
     h('span', { class: 'toast__icon' }, icon(ICONS[tone] || 'info')),
-    h('div', { class: 'toast__body' }, title ? h('p', { class: 'toast__title' }, title) : null, text ? h('p', { class: 'toast__text' }, text) : null),
+    onOpen ? h('button', { type: 'button', class: 'toast__body toast__body--action', onClick: () => { onDismiss?.(); onOpen(); } }, ...content)
+      : h('div', { class: 'toast__body' }, ...content),
     button({ label: t('common.close'), variant: 'ghost', size: 'sm', icon: 'x', iconOnly: true, onClick: onDismiss }),
   );
 }
 
 /** toast({ title, text, tone: 'info'|'success'|'warning'|'danger'|'reward', duration }) */
-export function toast({ title, text, tone = 'info', duration = 5000 } = {}) {
+export function toast({ title, text, tone = 'info', duration = 5000, onOpen } = {}) {
   const r = ensureRegion();
   let timer;
   const dismiss = () => {
@@ -34,7 +36,7 @@ export function toast({ title, text, tone = 'info', duration = 5000 } = {}) {
     const dur = parseFloat(getComputedStyle(el).animationDuration) || 0;
     if (dur > 0) el.addEventListener('animationend', () => el.remove(), { once: true }); else el.remove();
   };
-  const el = toastEl({ title, text, tone, onDismiss: dismiss });
+  const el = toastEl({ title, text, tone, onDismiss: dismiss, onOpen });
   r.append(el);
   // Danger toasts stay until dismissed so they can't be missed.
   if (tone !== 'danger' && duration > 0) {

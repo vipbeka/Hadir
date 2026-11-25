@@ -92,7 +92,15 @@ function mockApi(state, who, action, p) {
     case 'employee_points': return [{ color: 'green', delta: 1, source: 'owner_outcome', outcome_category: 'deal_closed', reason: 'Closed X', status: 'active', effective_work_date: today(), deduction_amount_piastres: 0 }];
     case 'award_outcome': return { event_id: 'e' };
     case 'manual_adjust': return { previous: 1, total: 2, events: [] };
-    case 'telegram_status': return null;
+    case 'telegram_status': return state.tgStatus ?? null;
+    case 'notify_status': return { prefs: state.alertPrefs ?? { check_in: { telegram: true, app: true, push: true }, check_out: { telegram: true, app: true, push: true },
+      absence: { telegram: true, app: true, push: true }, request: { telegram: true, app: true, push: true } },
+      telegram_channel_on: true, telegram_chat_set: state.tgChat !== false, push_devices: state.pushDevices ?? 0, unread: 0,
+      last_telegram: { status: 'sent', at: new Date().toISOString(), error: null } };
+    case 'owner_alert_prefs': state.alertPrefs = p.prefs; return p.prefs;
+    case 'notify_test': { const row = state.addNotif?.({ type: 'test', event: 'test', title_ar: 'إشعار تجريبي', body_ar: 'الإشعارات تعمل ✅', link: '#/owner/notifications' }); return { notification_id: row?.id, push_queued: state.pushDevices ?? 0, telegram_queued: true }; }
+    case 'notify_log': return { deliveries: [{ created_at: new Date().toISOString(), sent_at: new Date().toISOString(), event_type: 'check_in', channel: 'telegram', status: 'sent', attempt_count: 1, last_error: null, employee: 'موظف تجريبي' },
+      { created_at: new Date().toISOString(), event_type: 'owner_check_in', channel: 'web_push', status: 'failed', attempt_count: 2, last_error: 'push 503', employee: 'موظف تجريبي' }], errors: [] };
     case 'update_settings': if (!state.db) return p; Object.assign(state.db.settings, p, { updated_at: new Date().toISOString() }); return { ...state.db.settings };
     case 'save_day': case 'save_days': {
       const days = p.days || [p];
@@ -182,6 +190,38 @@ export async function installMock(context, state = {}) {
     { ...PEOPLE.staff, code_created_at: '2026-11-22T08:05:00Z', code_last_used_at: null, monthly_salary_piastres: 800000, session_count: 1 },
   ];
   state.calls ??= [];
+  // ---- owner notifications (table + Realtime) ----
+  state.notifs ??= [];
+  state.sockets ??= new Set();
+  state.addNotif = (n) => {
+    const row = { id: (state.notifs.reduce((m, r) => Math.max(m, r.id), 0) + 1), employee_id: PEOPLE.staff.id, flags: {}, read_at: null,
+      event_at: new Date().toISOString(), created_at: new Date().toISOString(), ...n };
+    state.notifs.unshift(row);
+    for (const ws of state.sockets) ws.live(row);
+    return row;
+  };
+  await context.routeWebSocket(/\/realtime\/v1\/websocket/, (ws) => {
+    const topics = new Map();
+    const send = (v2, joinRef, ref, topic, event, payload) => ws.send(JSON.stringify(v2 ? [joinRef, ref, topic, event, payload] : { join_ref: joinRef, ref, topic, event, payload }));
+    const sock = { live: (row) => { for (const [topic, t] of topics) {
+      const b = t.bindings.find((x) => x.event === 'INSERT' || x.event === '*');
+      if (b) send(t.v2, null, null, topic, 'postgres_changes', { ids: [b.id], data: { type: 'INSERT', schema: 'public', table: 'owner_notifications', commit_timestamp: new Date().toISOString(), columns: [], record: row, errors: null } });
+    } } };
+    state.sockets.add(sock);
+    ws.onClose(() => state.sockets.delete(sock));
+    ws.onMessage((raw) => {
+      let m; try { m = JSON.parse(String(raw)); } catch { return; }
+      const v2 = Array.isArray(m);
+      const [joinRef, ref, topic, event, payload] = v2 ? m : [m.join_ref, m.ref, m.topic, m.event, m.payload];
+      if (event === 'phx_join') {
+        const pc = (payload?.config?.postgres_changes || []).map((c, i) => ({ id: 1000 + i, event: c.event, schema: c.schema, table: c.table, filter: c.filter }));
+        topics.set(topic, { v2, bindings: pc });
+        send(v2, joinRef, ref, topic, 'phx_reply', { status: 'ok', response: { postgres_changes: pc } });
+        send(v2, null, null, topic, 'system', { status: 'ok', message: 'Subscribed to PostgreSQL', extension: 'postgres_changes', channel: topic.replace(/^realtime:/, '') });
+      } else if (event === 'phx_leave') { topics.delete(topic); send(v2, joinRef, ref, topic, 'phx_reply', { status: 'ok', response: {} }); }
+      else send(v2, joinRef, ref, topic, 'phx_reply', { status: 'ok', response: {} });
+    });
+  });
   await context.route('https://tile.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PNG1 }));
   await context.route('https://hppcujuplyjkuaxwmjhk.supabase.co/**', async (route) => {
     const req = route.request();
@@ -255,7 +295,18 @@ export async function installMock(context, state = {}) {
       const single = (req.headers().accept || '').includes('vnd.pgrst.object');
       return json(200, single ? tableData[tname] : (Array.isArray(tableData[tname]) ? tableData[tname] : [tableData[tname]]));
     }
-    if (tname === 'push_subscriptions') return json(201, []);
+    if (tname === 'owner_notifications') {
+      if (!sessionOk || who.role !== 'owner') return json(200, []);
+      const q = url.searchParams;
+      const match = (r) => (!q.get('type') || r.type === q.get('type').replace('eq.', ''))
+        && (!q.get('id') || String(r.id) === q.get('id').replace('eq.', ''))
+        && (q.get('read_at') !== 'is.null' || !r.read_at);
+      const rows = state.notifs.filter(match);
+      if (req.method() === 'PATCH') { rows.forEach((r) => Object.assign(r, body)); state.reads = (state.reads || 0) + rows.length; return route.fulfill({ status: 204, headers: cors }); }
+      if (req.method() === 'HEAD') return route.fulfill({ status: 200, headers: { ...cors, 'content-range': `*/${rows.length}`, 'access-control-expose-headers': 'content-range' } });
+      return json(200, rows.slice(0, 200));
+    }
+    if (tname === 'push_subscriptions') { (state.pushCalls ??= []).push({ method: req.method(), body }); return req.method() === 'DELETE' ? route.fulfill({ status: 204, headers: cors }) : json(201, []); }
     if (url.pathname === '/functions/v1/owner-employees') {
       if (!sessionOk) return json(401, { error: 'unauthorized' });
       if (who.role !== 'owner') return json(403, { error: 'forbidden' });

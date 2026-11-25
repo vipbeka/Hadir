@@ -17,6 +17,7 @@ export const OWNER_NAV = [
   { path: '/owner/dashboard', labelKey: 'nav.dashboard', icon: 'grid', bottom: true },
   { path: '/owner/approvals', labelKey: 'nav.approvals', icon: 'checkCircle', bottom: true },
   { path: '/owner/employees', labelKey: 'nav.employees', icon: 'users', bottom: true },
+  { path: '/owner/notifications', labelKey: 'nav.notifications', icon: 'inbox' },
   { path: '/owner/leaderboard', labelKey: 'nav.leaderboard', icon: 'trophy' },
   { path: '/owner/announcements', labelKey: 'nav.announcements', icon: 'bell' },
   { path: '/owner/payroll', labelKey: 'nav.payroll', icon: 'fileText' },

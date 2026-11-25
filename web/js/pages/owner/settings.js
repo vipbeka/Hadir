@@ -13,8 +13,9 @@ import { button, setLoading } from '../../ui/button.js';
 import { input, select, switchControl, setFieldError } from '../../ui/field.js';
 import { toast } from '../../ui/toast.js';
 import { icon } from '../../ui/icons.js';
+import { renderOwnerAlerts } from './owner-alerts.js';
 
-export async function renderSettings(main) {
+export async function renderSettings(main, ctx) {
   setDocumentTitle(t('set.title'));
   add(main, pageHeader({ iconName: 'settings', title: t('set.title'), subtitle: t('set.subtitle') }));
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
@@ -145,6 +146,10 @@ export async function renderSettings(main) {
         weekly_summary_enabled: chk(fWk), weekly_summary_dow: dow, weekly_summary_time: val(fWkT) });
     }, h('div', { class: 'cluster' }, tgBtn(t('set.tgConnect'), 'telegram_connect'), tgBtn(t('set.tgTest'), 'telegram_test'), tgStatus)));
     refreshTg();
+    // live owner notifications: toggles, status, test, device push, log
+    const alertsSlot = h('div', { id: 'owner-alerts' });
+    add(body, alertsSlot);
+    renderOwnerAlerts(alertsSlot, { me: ctx?.me });
     const reportsSlot = h('div', {});
     add(body, reportsSlot);
     renderReports(reportsSlot);
