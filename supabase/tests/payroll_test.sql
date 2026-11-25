@@ -173,7 +173,8 @@ begin
   perform pg_temp.ok((st -> 'totals' ->> 'deductions_piastres')::bigint = 12500, 'statement money = payroll deductions');
   perform pg_temp.ok((select (x ->> 'taken_days')::int from jsonb_array_elements(st -> 'leave_summary') x where x ->> 'status' = 'approved' and x ->> 'type' = 'personal') = 4,
     'cross-month leave counted only inside the range (28–31 Oct = 4)');
-  perform pg_temp.ok(st ->> 'leave_allowance' = 'not_configured', 'no leave balance invented');
+  perform pg_temp.ok(jsonb_typeof(st -> 'leave_allowance') = 'object' and st -> 'leave_allowance' ? 'entitled' and st -> 'leave_allowance' ? 'remaining',
+    'leave balance (entitled / remaining) shown with the statement');
 end $$;
 do $$ declare st jsonb := public.svc_employee_statement('00000000-0000-4000-d000-000000000001',
     '{"employee_id":"00000000-0000-4000-d000-00000000000b","from":"2099-01-01","to":"2099-01-10"}'); begin

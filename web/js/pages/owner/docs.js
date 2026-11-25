@@ -86,7 +86,7 @@ export function payslipDoc(slip) {
 }
 
 const STATUS_TONE = { present: 'ok', late: 'warn', absent: 'bad', absent_pending: 'warn', absence_excused: 'muted', leave: 'info', planned_leave: 'info',
-  holiday: 'muted', weekend: 'muted', future: 'muted', open: 'muted', no_record: 'warn', not_employed: 'muted' };
+  holiday: 'muted', weekend: 'muted', day_off: 'muted', future: 'muted', open: 'muted', no_record: 'warn', not_employed: 'muted' };
 /** One statement day → visible text cells (shared by HTML, PDF and CSV). */
 export function statementCells(day) {
   const notes = [];
@@ -96,6 +96,8 @@ export function statementCells(day) {
   if (day.corrected) notes.push(t('st.corrected', { by: day.corrected_by || '—' }));
   for (const l of day.leave || []) notes.push(t('st.leaveNote', { type: t(`leave.${l.type}`), status: t(`status.${l.status}`) }));
   for (const r of day.early_leave || []) notes.push(t('st.earlyNote', { time: formatClock(r.time), status: t(`status.${r.status}`) }));
+  for (const p of day.permissions || []) notes.push(t('st.permNote', { from: formatClock(p.from), to: formatClock(p.to), status: t(`status.${p.status}`) }));
+  for (const c of day.corrections || []) if (c.status === 'approved') notes.push(t('st.corrNote'));
   for (const ev of day.events || []) {
     if (ev.reversed) continue;
     notes.push(t('st.eventNote', { color: t(`points.${ev.color}`), status: ev.warning ? t('st.warning') : t(`st.ev.${ev.status}`) }));
@@ -113,7 +115,15 @@ export function statementTotals(st) {
   return [[t('st.t.work'), x.working_days_elapsed], [t('st.t.present'), x.present], [t('st.t.late'), x.late], [t('st.t.absent'), x.absent],
     [t('st.t.absentPending'), x.absent_pending], [t('st.t.excused'), x.absence_excused], [t('st.t.noRecord'), x.no_record],
     [t('st.t.leave'), x.leave_days], [t('st.t.missing'), x.missing_checkouts], [t('st.t.worked'), formatMinutes(x.worked_minutes)],
-    [t('st.t.deductions'), formatEGP(x.deductions_piastres)]];
+    [t('st.t.deductions'), formatEGP(x.deductions_piastres)],
+    ...(x.days_off != null ? [[t('st.t.daysOff'), x.days_off], [t('st.t.permissions'), x.permissions ? `${x.permissions} (${formatMinutes(x.permission_minutes)})` : 0]] : [])];
+}
+
+/** «رصيد الإجازات» line for the statement (null when the server has none). */
+export function allowanceLine(st) {
+  const b = st.leave_allowance;
+  if (!b || typeof b !== 'object') return t('st.allowanceNot');
+  return t('st.allowance', { year: b.year, entitled: b.entitled, used: b.used, pending: b.pending, remaining: b.remaining, sick: b.sick_used });
 }
 
 export function statementDoc(st, days = st.days) {
@@ -265,7 +275,7 @@ export async function statementPdf(st) {
     k.title(t('st.leaveTitle'));
     for (const l of st.leave_summary) k.kv(`${t(`leave.${l.type}`)} · ${t(`status.${l.status}`)}`, t('st.leaveDays', { taken: l.taken_days, planned: l.planned_days }));
   }
-  k.para(t('st.allowanceNot'));
+  k.para(allowanceLine(st));
   k.title(t('st.daily'));
   k.table([{ label: t('st.c.date'), w: 0.11 }, { label: t('st.c.day'), w: 0.1 }, { label: t('st.c.status'), w: 0.13 }, { label: t('st.c.in'), w: 0.08, align: 'end' },
     { label: t('st.c.out'), w: 0.08, align: 'end' }, { label: t('st.c.worked'), w: 0.1, align: 'end' }, { label: t('st.c.notes'), w: 0.3 }, { label: t('st.c.deduction'), w: 0.1, align: 'end' }],

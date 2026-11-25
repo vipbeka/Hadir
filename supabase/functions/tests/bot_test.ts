@@ -33,6 +33,10 @@ function harness() {
         case "svc_list_employees": return [{ id: EMP, full_name_ar: "أحمد علي", full_name_en: "Ahmed Ali", role: "staff", active: true }, { id: OWNER_ID, full_name_ar: "المالك", full_name_en: "Owner", role: "owner", active: true }];
         case "svc_decide_early_leave": return { result: "decided", status: args.p.approve ? "approved" : "rejected", employee: "أحمد علي", time: "3:00 م" };
         case "svc_decide_leave": return { result: "decided", status: "approved", employee: "أحمد علي" };
+        case "svc_decide_permission": return args.p.id === 99 ? { result: "already_decided", status: "approved", employee: "أحمد علي" }
+          : { result: "decided", status: args.p.approve ? "approved" : "rejected", employee: "أحمد علي", from: "10:00 ص", to: "11:00 ص", deducted: !!args.p.deduct };
+        case "svc_decide_correction": if (args.p.id === 66) throw new Error("ZH:already_checked_in");
+          return { result: "decided", status: args.p.approve ? "approved" : "rejected", employee: "أحمد علي", date: "2026-11-23" };
         case "svc_manual_adjust": return { previous: 1, total: 2 };
         case "svc_manual_check_in": return { employee: "أحمد علي", date: "2026-11-23", time: "9:30 ص", outcome: "green" };
         case "svc_bot_settings": return { geofence_lat: 29.98, geofence_lng: 31.32, radius_m: 100, reward_piastres: 10000, threshold: 30, work_days: [0, 1, 2, 3, 4],
@@ -42,7 +46,9 @@ function harness() {
         case "svc_bot_today": return { date: "2026-11-23", is_work_day: true, closed: true, closes_at: "11:00 ص", people: [
           { name: "أحمد", in: "9:12 ص", outcome: "green" }, { name: "سارة", in: "10:40 ص", outcome: "red" }, { name: "محمد" }, { name: "منى", leave: true }] };
         case "svc_bot_points": return { period: "2026-11-01", threshold: 30, rows: [{ rank: 1, name: "أحمد", green: 5, red: 1, black: 0, green_all: 12 }] };
-        case "svc_pending": return { early_leave: [{ id: 7, status: "pending", name_ar: "أحمد", work_date: "2026-11-23", requested_leave_time: "15:00:00", reason: "دكتور" }], leave: [] };
+        case "svc_pending": return { early_leave: [{ id: 7, status: "pending", name_ar: "أحمد", work_date: "2026-11-23", requested_leave_time: "15:00:00", reason: "دكتور" }], leave: [],
+          permission: [{ id: 12, status: "pending", name_ar: "سارة", work_date: "2026-11-24", from_time: "10:00:00", to_time: "11:00:00", reason: "بنك", over_limit: true, month_count: 4 }],
+          correction: [{ id: 5, status: "pending", name_ar: "محمد", work_date: "2026-11-22", kind: "both", check_in_time: "09:00:00", check_out_time: "17:00:00", reason: "النت فاصل" }] };
         case "svc_payroll": return { rows: [{ id: "report-row-id", employee_id: EMP, full_name_ar: "أحمد علي", worked_minutes: 600, deductions_piastres: 5000,
           bonuses_earned_piastres: 0, bonuses_paid_piastres: 0, unresolved_flags: [], points_breakdown: { green_total: 3, green_attendance: 3, green_outcome: 0, red_warnings: 1, red_chargeable: 1, red_amount_piastres: 5000, black_approved: 0, black_amount_piastres: 0, black_pending: 0 } }] };
       }
@@ -176,7 +182,7 @@ Deno.test("reports and broadcast", async () => {
   assertMatch(h.texts().at(-1)!, /❌ <b>محمد<\/b> — غايب/);
   await h.msg("/points"); assertMatch(h.texts().at(-1)!, /🥇 <b>أحمد<\/b> — 🟢 5/);
   await h.tap(`rp:${EMP}:0`); assertMatch(h.texts().at(-1)!, /تقرير <b>أحمد علي<\/b>[\s\S]*إجمالي الخصومات: <b>50 ج.م<\/b>/);
-  await h.msg("/pending"); assertMatch(h.texts().at(-1)!, /طلب انصراف مبكر #7/);
+  await h.msg("/pending"); assert(h.texts().some((x) => /طلب انصراف مبكر #7/.test(x)), "early leave listed");
   await h.msg("/broadcast"); await h.msg("بكرة إجازة رسمية 🎉");
   assert(!h.calls.some((c) => c.fn === "svc_broadcast"));
   await h.tap(`cf:${h.lastConfirmId()}`);
@@ -194,4 +200,36 @@ Deno.test("parsers", async () => {
   assertEquals(parseLatLng("https://www.google.com/maps/@29.5,31.1,17z"), { lat: 29.5, lng: 31.1 });
   assertEquals(await resolveLocation("https://evil.example/@1.5,2.5", async () => { throw new Error("must not fetch"); }), { lat: 1.5, lng: 2.5 });
   assertEquals(await resolveLocation("https://evil.example/x", async () => { throw new Error("must not fetch"); }), null);  // only Google short hosts are fetched
+});
+
+Deno.test("permission buttons: approve / reject / approve with deduction; already decided is reported", async () => {
+  const h = harness();
+  await h.tap("pm:a:12");
+  assertEquals(h.calls.find((c) => c.fn === "svc_decide_permission")!.args.p, { id: 12, approve: true, deduct: false, channel: "telegram" });
+  assertMatch(h.sent.at(-1)!.body.text, /✅ اتقبل إذن أحمد علي من 10:00 ص لـ 11:00 ص/);
+  assertEquals(h.sent.at(-1)!.body.reply_markup.inline_keyboard.length, 0);
+  await h.tap("pm:d:12");
+  assertEquals(h.calls.filter((c) => c.fn === "svc_decide_permission").at(-1)!.args.p, { id: 12, approve: true, deduct: true, channel: "telegram" });
+  assertMatch(h.sent.at(-1)!.body.text, /مع نقطة حمراء/);
+  await h.tap("pm:r:12");
+  assertEquals(h.calls.filter((c) => c.fn === "svc_decide_permission").at(-1)!.args.p.approve, false);
+  await h.tap("pm:a:99");
+  assertMatch(h.sent.at(-1)!.body.text, /اتحسم قبل كده/);
+  await h.tap("pm:x:12");                                  // unknown action → ignored
+  assertEquals(h.calls.filter((c) => c.fn === "svc_decide_permission").length, 4);
+});
+
+Deno.test("correction buttons + clear error text; /pending lists permissions and corrections", async () => {
+  const h = harness();
+  await h.tap("cr:a:5");
+  assertEquals(h.calls.find((c) => c.fn === "svc_decide_correction")!.args.p, { id: 5, approve: true, channel: "telegram" });
+  assertMatch(h.sent.at(-1)!.body.text, /اتصحّح حضور أحمد علي يوم 2026-11-23/);
+  await h.tap("cr:a:66");
+  assertMatch(h.sent.at(-1)!.body.text, /مسجّل حضور في اليوم ده بالفعل/);
+  await h.msg("/pending");
+  const t = h.texts();
+  assert(t.some((x) => /🚪 طلب إذن #12[\s\S]*سارة[\s\S]*من 10:00 لـ 11:00[\s\S]*فوق الحد الشهري \(4/.test(x)), "permission listed");
+  assert(t.some((x) => /🛠️ طلب تصحيح حضور #5[\s\S]*حضور 09:00 وانصراف 17:00[\s\S]*النت فاصل/.test(x)), "correction listed");
+  const perm = h.sent.find((s) => String(s.body.text).includes("طلب إذن #12"))!;
+  assertEquals(perm.body.reply_markup.inline_keyboard.map((r: Array<{ callback_data: string }>) => r.map((b) => b.callback_data)), [["pm:a:12", "pm:r:12"], ["pm:d:12"]]);
 });

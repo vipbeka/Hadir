@@ -54,7 +54,7 @@ export const esc = (s: unknown) => String(s ?? "").replace(/[<>&]/g, (c) => ({ "
 /** Owner messages (Arabic, with the product name). Never contains codes or salary. */
 export const APP_URL = "https://hadar-ee191.web.app/";
 const ICON: Record<string, string> = { check_in: "✅", red_point: "⏰", check_out: "🏁", black_pending: "⚫",
-  leave_request: "🌴", early_leave_request: "🕒", reward_request: "🏆" };
+  leave_request: "🌴", early_leave_request: "🕒", reward_request: "🏆", permission_request: "🚪", correction_request: "🛠️" };
 
 export function formatOwnerMessage(p: Record<string, unknown>): { text: string; reply_markup?: unknown } {
   const head = `<b>${APP}</b>\n`;
@@ -66,6 +66,11 @@ export function formatOwnerMessage(p: Record<string, unknown>): { text: string; 
     const rows: unknown[][] = [];
     if (p.kind === "early_leave_request" && p.id != null) rows.push([{ text: "✅ قبول", callback_data: `el:a:${p.id}` }, { text: "❌ رفض", callback_data: `el:r:${p.id}` }]);
     if (p.kind === "leave_request" && p.status === "pending" && typeof p.id === "string") rows.push([{ text: "✅ قبول", callback_data: `lv:a:${p.id}` }, { text: "❌ رفض", callback_data: `lv:r:${p.id}` }]);
+    if (p.kind === "permission_request" && p.id != null) {
+      rows.push([{ text: "✅ قبول", callback_data: `pm:a:${p.id}` }, { text: "❌ رفض", callback_data: `pm:r:${p.id}` }]);
+      if (p.over_limit) rows.push([{ text: "✅ قبول مع خصم (نقطة حمراء)", callback_data: `pm:d:${p.id}` }]);
+    }
+    if (p.kind === "correction_request" && p.id != null) rows.push([{ text: "✅ قبول", callback_data: `cr:a:${p.id}` }, { text: "❌ رفض", callback_data: `cr:r:${p.id}` }]);
     if (typeof p.link === "string" && p.link.startsWith("#/owner/")) rows.push([{ text: "📱 فتح في التطبيق", url: `${APP_URL}${p.link}` }]);
     return { text, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
   }

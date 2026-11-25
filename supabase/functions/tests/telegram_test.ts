@@ -41,3 +41,17 @@ Deno.test("live owner events use the database text, keep request buttons, add an
   const bad = formatOwnerMessage({ kind: "check_out", text_ar: "انصراف\nx", link: "https://evil.example" });
   assert(bad.reply_markup === undefined, "only in-app links");
 });
+
+Deno.test("live permission / correction messages: same text + approve/reject (+deduction when over the limit) + open in app", () => {
+  const pm = formatOwnerMessage({ kind: "permission_request", id: 12, over_limit: true, text_ar: "طلب إذن\nسارة طلب إذن اليوم من 10:00 ص إلى 11:00 ص", link: "#/owner/approvals" });
+  const rows = (pm.reply_markup as { inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>> }).inline_keyboard;
+  assert(pm.text.includes("🚪 <b>طلب إذن</b>") && pm.text.includes("سارة طلب إذن"), "permission text");
+  assert(rows[0][0].callback_data === "pm:a:12" && rows[0][1].callback_data === "pm:r:12" && rows[1][0].callback_data === "pm:d:12", "permission buttons");
+  assert(rows[2][0].url === "https://hadar-ee191.web.app/#/owner/approvals", "open in app");
+  const pm2 = formatOwnerMessage({ kind: "permission_request", id: 13, text_ar: "طلب إذن\nx", link: "#/owner/approvals" });
+  assert((pm2.reply_markup as { inline_keyboard: unknown[] }).inline_keyboard.length === 2, "no deduction button within the limit");
+  const cr = formatOwnerMessage({ kind: "correction_request", id: 5, text_ar: "طلب تصحيح حضور\n<b>x</b>", link: "#/owner/approvals" });
+  const r2 = (cr.reply_markup as { inline_keyboard: Array<Array<{ callback_data?: string }>> }).inline_keyboard;
+  assert(r2[0][0].callback_data === "cr:a:5" && r2[0][1].callback_data === "cr:r:5", "correction buttons");
+  assert(cr.text.includes("&lt;b&gt;x&lt;/b&gt;"), "escaped");
+});

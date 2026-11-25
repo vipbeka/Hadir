@@ -151,7 +151,7 @@ const ERR: Record<string, string> = {
   invalid_time: "الوقت أو التاريخ مش صحيح (ومينفعش يكون في المستقبل).", invalid_settings: "القيمة دي مش مقبولة.", windows_overlap: "النوافذ متداخلة.",
   invalid_window: "صيغة النوافذ مش صحيحة.", not_found: "مش لاقي الطلب ده.", invalid_transition: "مينفعش تغيّر الطلب ده.",
   invalid_text: "النص فاضي أو طويل جدًا.", cannot_deactivate_self: "مينفعش توقف حسابك.", last_owner: "لازم يفضل مالك واحد على الأقل.",
-  forbidden: "مش مسموح لك بالعملية دي.",
+  forbidden: "مش مسموح لك بالعملية دي.", not_checked_in: "الموظف مش مسجّل حضور في اليوم ده.", already_checked_out: "الموظف مسجّل انصراف بالفعل في اليوم ده.",
   local_time_nonexistent: "الوقت ده مش موجود في اليوم ده (بداية التوقيت الصيفي). اختار وقت تاني.",
   local_time_ambiguous: "الوقت ده بيتكرر مرتين في اليوم ده (نهاية التوقيت الصيفي). اختار وقت تاني.",
   schedule_out_of_range: "الموعد لازم يكون بعد دقيقة على الأقل وخلال 90 يوم.", invalid_delete_after: "مدة الحذف دي مش مسموحة.",
@@ -364,6 +364,8 @@ export class Bot {
     if (data === "r:points") return this.points();
     if ((m = /^el:(a|r):(\d{1,12})$/.exec(data))) return this.decideEarly(Number(m[2]), m[1] === "a", message, null);
     if ((m = new RegExp(`^lv:(a|r):(${UUID})$`).exec(data))) return this.decideLeave(m[2], m[1] === "a", message);
+    if ((m = /^pm:(a|r|d):(\d{1,12})$/.exec(data))) return this.decidePermission(Number(m[2]), m[1] !== "r", m[1] === "d", message);
+    if ((m = /^cr:(a|r):(\d{1,12})$/.exec(data))) return this.decideCorrection(Number(m[2]), m[1] === "a", message);
     if ((m = new RegExp(`^e:(v|p|c|r):(${UUID})$`).exec(data))) return this.onEmployee(m[1], m[2]);
     if ((m = new RegExp(`^p:(g\\+|g-|r\\+|r-):(${UUID})$`).exec(data))) {
       const emp = (await this.staff()).find((e) => e.id === m![2]);
@@ -404,7 +406,9 @@ export class Bot {
     const p = await this.d.rpc<Record<string, Array<Record<string, unknown>>>>("svc_pending", { p_actor: this.c.ownerId, p: {} });
     const early = (p.early_leave || []).filter((r) => r.status === "pending");
     const leave = (p.leave || []).filter((r) => r.status === "pending");
-    if (!early.length && !leave.length) return this.send("✅ مفيش طلبات مستنية قرار.", kb([back()]));
+    const perm = (p.permission || []).filter((r) => r.status === "pending");
+    const corr = (p.correction || []).filter((r) => r.status === "pending");
+    if (!early.length && !leave.length && !perm.length && !corr.length) return this.send("✅ مفيش طلبات مستنية قرار.", kb([back()]));
     for (const r of early) {
       await this.send(`🕒 طلب انصراف مبكر #${r.id}\n• الموظف: <b>${esc(r.name_ar)}</b>\n• اليوم: ${esc(r.work_date)} — الساعة ${esc(String(r.requested_leave_time).slice(0, 5))}${r.reason ? `\n• السبب: ${esc(r.reason)}` : ""}`,
         kb([[{ text: "✅ قبول", callback_data: `el:a:${r.id}` }, { text: "❌ رفض", callback_data: `el:r:${r.id}` }]]));
@@ -412,6 +416,18 @@ export class Bot {
     for (const r of leave) {
       await this.send(`🌴 طلب إجازة ${r.type === "sick" ? "مرضية" : "شخصية"}\n• الموظف: <b>${esc(r.name_ar)}</b>\n• من ${esc(r.from_date)} لـ ${esc(r.to_date)}${r.reason ? `\n• السبب: ${esc(r.reason)}` : ""}`,
         kb([[{ text: "✅ قبول", callback_data: `lv:a:${r.id}` }, { text: "❌ رفض", callback_data: `lv:r:${r.id}` }]]));
+    }
+    for (const r of perm) {
+      const rows: Kb = [[{ text: "✅ قبول", callback_data: `pm:a:${r.id}` }, { text: "❌ رفض", callback_data: `pm:r:${r.id}` }]];
+      if (r.over_limit) rows.push([{ text: "✅ قبول مع خصم (نقطة حمراء)", callback_data: `pm:d:${r.id}` }]);
+      await this.send(`🚪 طلب إذن #${r.id}\n• الموظف: <b>${esc(r.name_ar)}</b>\n• يوم ${esc(r.work_date)} من ${esc(String(r.from_time).slice(0, 5))} لـ ${esc(String(r.to_time).slice(0, 5))}`
+        + `${r.reason ? `\n• السبب: ${esc(r.reason)}` : ""}${r.over_limit ? `\n⚠️ فوق الحد الشهري (${esc(r.month_count)} أذونات الشهر ده)` : ""}`, kb(rows));
+    }
+    for (const r of corr) {
+      const what = r.kind === "check_in" ? `حضور ${esc(String(r.check_in_time).slice(0, 5))}` : r.kind === "check_out" ? `انصراف ${esc(String(r.check_out_time).slice(0, 5))}`
+        : `حضور ${esc(String(r.check_in_time).slice(0, 5))} وانصراف ${esc(String(r.check_out_time).slice(0, 5))}`;
+      await this.send(`🛠️ طلب تصحيح حضور #${r.id}\n• الموظف: <b>${esc(r.name_ar)}</b>\n• يوم ${esc(r.work_date)}: ${what}\n• السبب: ${esc(r.reason)}`,
+        kb([[{ text: "✅ قبول", callback_data: `cr:a:${r.id}` }, { text: "❌ رفض", callback_data: `cr:r:${r.id}` }]]));
     }
     return null;
   }
@@ -443,6 +459,28 @@ export class Bot {
       const r = await this.d.rpc<Record<string, unknown>>("svc_decide_leave", { p_actor: this.c.ownerId, p: { id, approve } });
       line = r.result === "already_decided" ? `ℹ️ الطلب ده اتحسم قبل كده: ${statusAr[String(r.status)] ?? esc(r.status)}`
         : r.status === "approved" ? `✅ اتقبلت إجازة <b>${esc(r.employee)}</b> — اتبعتله إشعار.` : `❌ اترفضت إجازة <b>${esc(r.employee)}</b> — اتبعتله إشعار.`;
+    } catch (e) { line = errText(e); }
+    return this.stamp(message, line);
+  }
+
+  async decidePermission(id: number, approve: boolean, deduct: boolean, message: { message_id: number; text?: string; entities?: unknown[] }) {
+    let line: string;
+    try {
+      const r = await this.d.rpc<Record<string, unknown>>("svc_decide_permission", { p_actor: this.c.ownerId, p: { id, approve, deduct, channel: "telegram" } });
+      line = r.result === "already_decided" ? `ℹ️ الطلب #${id} (${esc(r.employee)}) اتحسم قبل كده: ${statusAr[String(r.status)] ?? esc(r.status)}`
+        : r.status === "approved" ? `✅ اتقبل إذن <b>${esc(r.employee)}</b> من ${esc(r.from)} لـ ${esc(r.to)}${r.deducted ? " (مع نقطة حمراء)" : ""} — اتبعتله إشعار.`
+        : `❌ اترفض إذن <b>${esc(r.employee)}</b> — اتبعتله إشعار.`;
+    } catch (e) { line = errText(e); }
+    return this.stamp(message, line);
+  }
+
+  async decideCorrection(id: number, approve: boolean, message: { message_id: number; text?: string; entities?: unknown[] }) {
+    let line: string;
+    try {
+      const r = await this.d.rpc<Record<string, unknown>>("svc_decide_correction", { p_actor: this.c.ownerId, p: { id, approve, channel: "telegram" } });
+      line = r.result === "already_decided" ? `ℹ️ الطلب #${id} (${esc(r.employee)}) اتحسم قبل كده: ${statusAr[String(r.status)] ?? esc(r.status)}`
+        : r.status === "approved" ? `✅ اتصحّح حضور <b>${esc(r.employee)}</b> يوم ${esc(r.date)} — اتبعتله إشعار.`
+        : `❌ اترفض تصحيح حضور <b>${esc(r.employee)}</b> — اتبعتله إشعار.`;
     } catch (e) { line = errText(e); }
     return this.stamp(message, line);
   }

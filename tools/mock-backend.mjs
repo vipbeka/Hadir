@@ -24,25 +24,75 @@ function mockApi(state, who, action, p) {
       is_work_day: true, check_in_enabled: true, points_enabled: true, holiday: null,
       geofence: { lat: 29.9831944, lng: 31.3239444, radius_m: 100 }, work_start_time: '09:00:00', work_end_time: '17:00:00', expected_end_time: '17:00:00',
       windows: [{ label_ar: 'مبكر', label_en: 'Early', start: '07:00:00', end: '08:00:00', green: true }, { label_ar: 'عادي', label_en: 'Normal', start: '09:00:00', end: '10:00:00', green: true }, { label_ar: 'متأخر', label_en: 'Late', start: '10:00:00', end: '11:00:00', green: true }],
-      attendance: state.attendance || null, early_leave: state.earlyLeave || null, missing_checkouts: 0 };
+      attendance: state.attendance || null, early_leave: state.earlyLeave || null, missing_checkouts: 0,
+      ...(state.dayOff ? { is_work_day: false, day_off: true } : { day_off: false }), permissions: state.todayPerms || [] };
     case 'my_summary': return { period: today().slice(0, 8) + '01', threshold: 30, reward_amount_piastres: 10000, payout_methods: ['instapay', 'vodafone_cash'],
-      period_totals: { green: state.green ?? 7, red: 1, black: 0 }, lifetime_totals: { green: 21, red: 2, black: 0 }, pending_black: 0, days_present: 14, worked_minutes: 6750, reward_request: state.reward || null };
+      period_totals: { green: state.green ?? 7, red: 1, black: 0 }, lifetime_totals: { green: 21, red: 2, black: 0 }, pending_black: 0, days_present: 14, worked_minutes: 6750, reward_request: state.reward || null, work_days_left: state.workDaysLeft ?? 18 };
     case 'check_in': state.attendance = { checked_in_at: new Date().toISOString(), checked_out_at: null, worked_minutes: null, check_in_outcome: 'green' };
       return { outcome: 'green', window_label_ar: 'متأخر', window_label_en: 'Late', checked_in_at: new Date().toISOString(), distance_m: 12, warning_only: null };
     case 'check_out': state.attendance = { ...state.attendance, checked_out_at: new Date().toISOString(), worked_minutes: 125 }; return { checked_out_at: state.attendance.checked_out_at, worked_minutes: 125, distance_m: 12 };
     case 'request_early_leave': state.earlyLeave = { id: 7, requested_leave_time: `${p.leave_time}:00`, status: 'pending' }; return state.earlyLeave;
     case 'cancel_early_leave': state.earlyLeave = null; return { result: 'cancelled' };
-    case 'request_leave': return { id: 'x', status: 'pending' };
+    case 'request_leave': (state.leaveCalls ??= []).push(p); return { id: 'x', status: 'pending' };
+    // ---- staff tools
+    case 'my_leave_balance': return state.balance ?? { year: Number(today().slice(0, 4)), entitled: 21, custom: false, note: null, used: 3, pending: 2, remaining: 18, available: 16, sick_used: 1 };
+    case 'request_permission': {
+      if (!(p.to_time > p.from_time)) throw Object.assign(new Error(), { code: 'invalid_time' });
+      const rows = (state.permRows ??= []);
+      const used = rows.filter((r) => ['pending', 'approved'].includes(r.status)).length;
+      const [h1, m1] = p.from_time.split(':').map(Number); const [h2, m2] = p.to_time.split(':').map(Number);
+      const row = { id: 100 + rows.length, employee_id: who.id, work_date: p.date, from_time: `${p.from_time}:00`, to_time: `${p.to_time}:00`, minutes: (h2 * 60 + m2) - (h1 * 60 + m1),
+        reason: p.reason || null, over_limit: used >= 2, status: 'pending', admin_comment: null, deduction_event_id: null, created_at: new Date().toISOString() };
+      rows.unshift(row); return row;
+    }
+    case 'cancel_permission': { const r = (state.permRows || []).find((x) => x.id === p.id); r.status = 'cancelled'; return { result: 'cancelled' }; }
+    case 'request_correction': {
+      const rows = (state.corrRows ??= []);
+      if (rows.some((r) => r.work_date === p.date && r.status === 'pending')) throw Object.assign(new Error(), { code: 'already_pending' });
+      const row = { id: 50 + rows.length, employee_id: who.id, work_date: p.date, kind: p.kind, check_in_time: p.check_in_time ? `${p.check_in_time}:00` : null,
+        check_out_time: p.check_out_time ? `${p.check_out_time}:00` : null, reason: p.reason, status: 'pending', admin_comment: null, created_at: new Date().toISOString() };
+      rows.unshift(row); return row;
+    }
+    case 'cancel_correction': { const r = (state.corrRows || []).find((x) => x.id === p.id); r.status = 'cancelled'; return { result: 'cancelled' }; }
+    case 'my_pay': return { month: p.month || today().slice(0, 8) + '01', is_current: !p.month || p.month === today().slice(0, 8) + '01', pay_visible: !!state.payVisible,
+      ...(state.payVisible ? { base_piastres: 800000, net_piastres: 785000, paid_piastres: 0, remaining_piastres: 785000 } : {}),
+      deductions_piastres: 15000, earnings_piastres: 0, pending_rewards_piastres: 0, warnings_count: 1, black_pending: 1, missing_checkouts: 0, green_points: 7, threshold: 30,
+      attendance: { present_days: 14, late_days: 2, absence_days: 0, leave_days: 1, worked_minutes: 6750 },
+      events: [{ date: today(), color: 'red', delta: 1, status: 'active', warning: true, source: 'auto_window', reason: 'late check-in 10:12', reversed: false, deduction_piastres: 0 },
+        { date: today(), color: 'red', delta: 1, status: 'active', warning: false, source: 'auto_window', reason: 'late check-in 10:40', reversed: false, deduction_piastres: 5000 },
+        { date: today(), color: 'black', delta: 1, status: 'pending_approval', warning: false, source: 'auto_absence', reason: 'no check-in', reversed: false, deduction_piastres: 0 }] };
+    case 'my_changes': case 'employee_changes': return state.changes ?? [
+      { id: 3, at: new Date().toISOString(), action: 'correction.rejected', reason: 'مش مسجّل في الكاميرا', by: 'مالك زينترا', kind: 'user', before: {}, after: {}, date: null },
+      { id: 2, at: new Date().toISOString(), action: 'attendance.correct', reason: 'طلب تصحيح #4: نسيت', by: 'مالك زينترا', kind: 'user', before: {}, after: { checked_out_at: new Date().toISOString() }, date: today() },
+      { id: 1, at: new Date().toISOString(), action: 'points.manual', reason: 'تأخير متكرر', by: 'مالك زينترا', kind: 'user', before: { total: 1 }, after: { color: 'red', total: 2 }, date: null }];
+    case 'decide_permission': { (state.decisions ??= []).push({ action, ...p }); return { result: 'decided', status: p.approve ? 'approved' : 'rejected', deducted: !!p.deduct }; }
+    case 'decide_correction': { (state.decisions ??= []).push({ action, ...p }); return { result: 'decided', status: p.approve ? 'approved' : 'rejected' }; }
+    case 'employee_schedule': return state.schedule ?? { employee_id: p.employee_id, company_start: '09:00:00', company_end: '17:00:00',
+      days: [0, 1, 2, 3, 4, 5, 6].map((d) => ({ day_of_week: d, company_work_day: d < 5, is_work_day: d < 5, start_time: null, end_time: null })) };
+    case 'save_employee_schedule': {
+      (state.scheduleSaves ??= []).push(p);
+      const cur = mockApi(state, who, 'employee_schedule', p);
+      cur.days = cur.days.map((d) => { const x = p.days.find((y) => y.day_of_week === d.day_of_week); return x ? { ...d, is_work_day: x.is_work_day, start_time: x.start_time, end_time: x.end_time } : d; });
+      state.schedule = cur; return cur;
+    }
+    case 'leave_balances': return { year: p.year, default_days: 21, employees: [{ employee_id: p.employee_id || sid, name_ar: 'أحمد علي', name_en: 'Ahmed Ali', active: true,
+      ...(state.ownerBalance ?? { year: p.year, entitled: 21, custom: false, note: null, used: 3, pending: 0, remaining: 18, available: 18, sick_used: 0 }) }] };
+    case 'set_leave_balance': { (state.balanceSaves ??= []).push(p); state.ownerBalance = { year: p.year, entitled: p.entitled_days, custom: true, note: p.note || null, used: 3, pending: 0,
+      remaining: p.entitled_days - 3, available: p.entitled_days - 3, sick_used: 0 }; return state.ownerBalance; }
+    case 'staff_tools': return state.staffTools ??= { permission_monthly_limit: 3, permission_max_minutes: 180, annual_leave_days: 21, checkout_overdue_reminder: true, checkout_overdue_min: 30, staff_pay_visible: false };
+    case 'save_staff_tools': state.staffTools = { ...mockApi(state, who, 'staff_tools', {}), ...p }; return state.staffTools;
     case 'request_reward': state.reward = { status: 'pending' }; return state.reward;
     case 'set_reminders': return { reminders_enabled: p.enabled };
-    case 'owner_dashboard': return { today: today(), period: today().slice(0, 8) + '01', is_work_day: true, pending: { black: 1, leave: 1, early_leave: 1, reward: 1, missing_checkout: 1 },
+    case 'owner_dashboard': return { today: today(), period: today().slice(0, 8) + '01', is_work_day: true, pending: { black: 1, leave: 1, early_leave: 1, reward: 1, missing_checkout: 1, permission: 1, correction: 1 },
       employees: state.employees.filter((e) => e.role === 'staff').map((e) => ({ ...e, green: 7, red: 1, black: 0, pending_black: 1, today: { checked_in_at: new Date().toISOString(), checked_out_at: null, outcome: 'green' } })) };
     case 'pending': return {
       black: [{ id: 'b1', employee_id: sid, name_ar: 'أحمد علي', name_en: 'Ahmed Ali', date: today(), amount_piastres: 100000 }],
       leave: [{ id: 'l1', employee_id: sid, name_ar: 'أحمد علي', name_en: 'Ahmed Ali', type: 'sick', from_date: today(), to_date: today(), status: 'pending', reason: 'flu' }],
       early_leave: [{ id: 7, employee_id: sid, name_ar: 'أحمد علي', name_en: 'Ahmed Ali', work_date: today(), requested_leave_time: '15:00:00', status: 'pending', reason: 'doctor' }],
       reward: [{ id: 'r1', employee_id: sid, name_ar: 'أحمد علي', name_en: 'Ahmed Ali', period_month: today().slice(0, 8) + '01', reward_amount_piastres: 10000, payout_method: 'instapay', payout_number: '01001234567', status: 'pending' }],
-      missing_checkout: [{ id: 'a1', name_ar: 'أحمد علي', name_en: 'Ahmed Ali', work_date: today(), checked_in_at: new Date().toISOString() }] };
+      missing_checkout: [{ id: 'a1', name_ar: 'أحمد علي', name_en: 'Ahmed Ali', work_date: today(), checked_in_at: new Date().toISOString() }],
+      permission: [{ id: 12, employee_id: sid, name_ar: 'أحمد علي', name_en: 'Ahmed Ali', work_date: today(), from_time: '10:00:00', to_time: '11:30:00', minutes: 90, reason: 'بنك', over_limit: true, month_count: 4, status: 'pending' }],
+      correction: [{ id: 5, employee_id: sid, name_ar: 'أحمد علي', name_en: 'Ahmed Ali', work_date: today(), kind: 'both', check_in_time: '09:00:00', check_out_time: '17:00:00', reason: 'النت كان فاصل', status: 'pending' }] };
     case 'decide_black': if (!p.approve || p.confirm_amount_piastres === 100000) return { result: 'decided' }; throw Object.assign(new Error(), { code: 'confirm_amount' });
     case 'payroll': return { month: p.month, generated_at: new Date().toISOString(), timezone: 'Africa/Cairo', rule_version: 1, red_penalty_piastres: 5000, black_penalty_piastres: 100000, reward_amount_piastres: 10000, threshold: 30,
       rows: (state.payrollStaff || state.employees.filter((e) => e.role === 'staff')).map((e) => ({ ...e, worked_minutes: 6750, unresolved_flags: [], incomplete: false, deductions_piastres: 105000, bonuses_earned_piastres: 0, bonuses_paid_piastres: 0, net_adjustment_piastres: -105000,
@@ -277,6 +327,8 @@ export async function installMock(context, state = {}) {
         { color: 'red', delta: 1, source: 'auto_window', reason: 'late', status: 'active', warning_only: true, effective_work_date: today(), deduction_amount_piastres: 0 }],
       leave_requests: [{ id: 'l1', type: 'personal', from_date: today(), to_date: today(), status: 'approved', reason: 'family' }],
       early_leave_requests: [{ id: 7, work_date: today(), requested_leave_time: '15:00:00', status: 'pending' }],
+      permission_requests: state.permRows ??= [],
+      correction_requests: state.corrRows ??= [],
       public_holidays: [{ id: 'h1', holiday_date: '2026-10-06', name_ar: 'عيد القوات المسلحة', name_en: 'Armed Forces Day', kind: 'official', enabled: true },
         { id: 'h2', holiday_date: '2027-01-07', name_ar: 'عيد الميلاد المجيد', name_en: 'Coptic Christmas', kind: 'official', enabled: false }, { id: 'h3', holiday_date: '2027-03-10', name_ar: 'عيد الفطر (اليوم الأول)', name_en: 'Eid al-Fitr (day 1)', kind: 'official', enabled: true, provisional: true }],
       settings: { id: true, rule_version: 3, updated_at: new Date().toISOString(), red_penalty_piastres: 5000, black_penalty_piastres: 100000, green_reward_threshold: 30, reward_amount_piastres: 10000,

@@ -14,7 +14,7 @@ import { toast } from '../../ui/toast.js';
 import { store } from '../../core/storage.js';
 
 const nm = (r) => (getLang() === 'ar' ? r.name_ar : r.name_en);
-const TABS = ['black', 'leave', 'early', 'reward', 'missing'];
+const TABS = ['black', 'leave', 'permission', 'correction', 'early', 'reward', 'missing'];
 const tone = (s) => ({ pending: 'warning', approved: 'success', paid: 'success', rejected: 'danger', cancelled: 'neutral' }[s] || 'neutral');
 
 export async function renderApprovals(main) {
@@ -45,11 +45,13 @@ export async function renderApprovals(main) {
   function render() {
     const counts = { black: data.black.length, leave: data.leave.filter((x) => x.status === 'pending').length,
       early: data.early_leave.filter((x) => x.status === 'pending').length,
+      permission: (data.permission || []).filter((x) => x.status === 'pending').length,
+      correction: (data.correction || []).filter((x) => x.status === 'pending').length,
       reward: data.reward.filter((x) => ['pending', 'approved'].includes(x.status)).length, missing: data.missing_checkout.length };
     tabs.replaceChildren(...TABS.map((k) => h('button', { type: 'button', class: 'segmented__btn', role: 'tab', 'aria-selected': String(tab === k), 'aria-pressed': String(tab === k),
       onClick: () => { tab = k; store.set('zh.apTab', k); render(); } }, t(`ap.${k}`), counts[k] ? h('span', { class: 'badge badge--accent num' }, String(counts[k])) : null)));
     clear(body);
-    const list = { black: blackList, leave: leaveList, early: earlyList, reward: rewardList, missing: missingList }[tab]();
+    const list = { black: blackList, leave: leaveList, permission: permissionList, correction: correctionList, early: earlyList, reward: rewardList, missing: missingList }[tab]();
     add(body, list.length ? h('div', { class: 'stack' }, list) : emptyState({ iconName: 'checkCircle', title: t('ap.empty') }));
   }
 
@@ -87,6 +89,52 @@ export async function renderApprovals(main) {
         catch (err) { toast({ title: t('error.title'), text: errorMessage(err), tone: 'danger' }); }
       }) }));
       return row(nm(r), [`${t(`req.${r.type}`)} · ${formatDate(r.from_date)} → ${formatDate(r.to_date)}`, r.reason, r.admin_comment ? t('req.ownerComment', { c: r.admin_comment }) : null],
+        badge(t(`status.${r.status}`), { tone: tone(r.status), dot: true }), actions);
+    });
+  }
+
+  function permissionList() {
+    return (data.permission || []).map((r) => {
+      const actions = [];
+      const decide = (btn, params) => act(btn, 'decide_permission', { id: r.id, channel: 'dashboard', ...params });
+      if (r.status === 'pending') {
+        const no = button({ label: t('common.reject'), size: 'sm', onClick: () => decide(no, { approve: false }) });
+        const yes = button({ label: t('common.approve'), variant: 'primary', size: 'sm', onClick: () => decide(yes, { approve: true }) });
+        actions.push(no, yes);
+        if (r.over_limit) {
+          const ded = button({ label: t('perm.approveDeduct'), variant: 'danger', size: 'sm', onClick: async () => {
+            const ok = await confirmDialog({ title: t('perm.approveDeduct'), text: t('perm.deductConfirm', { name: nm(r) }), confirmLabel: t('perm.approveDeduct'), variant: 'danger' });
+            if (ok) decide(ded, { approve: true, deduct: true });
+          } });
+          actions.push(ded);
+        }
+      } else if (r.status === 'approved') {
+        const rv = button({ label: t('common.reject'), size: 'sm', onClick: () => decide(rv, { approve: false, revoke: true }) });
+        actions.push(rv);
+      }
+      return row(`#${r.id} · ${nm(r)}`, [`${formatDate(r.work_date)} · ${formatClock(r.from_time)} → ${formatClock(r.to_time)} (${t('perm.minutes', { n: r.minutes })})`,
+        r.reason, t('perm.monthCount', { n: r.month_count ?? '—' }), r.over_limit ? (r.deduction_event_id ? t('perm.deducted') : t('perm.overLimit')) : null,
+        r.decision_channel ? `via ${r.decision_channel}` : null],
+        badge(t(`status.${r.status}`), { tone: tone(r.status), dot: true }), actions);
+    });
+  }
+
+  function correctionList() {
+    return (data.correction || []).map((r) => {
+      const actions = [];
+      if (r.status === 'pending') {
+        const no = button({ label: t('common.reject'), size: 'sm', onClick: () => commentPrompt(t('corr.rejectTitle'), async (c) => {
+          try { await api('decide_correction', { id: r.id, approve: false, comment: c, channel: 'dashboard' }); toast({ title: t('ap.decided'), tone: 'success' }); load(); }
+          catch (err) { toast({ title: t('error.title'), text: errorMessage(err), tone: 'danger' }); }
+        }) });
+        const yes = button({ label: t('common.approve'), variant: 'primary', size: 'sm', onClick: () => act(yes, 'decide_correction', { id: r.id, approve: true, channel: 'dashboard' }, t('ap.corrected')) });
+        actions.push(no, yes);
+      }
+      const what = r.kind === 'check_in' ? t('corr.inAt', { time: formatClock(r.check_in_time) })
+        : r.kind === 'check_out' ? t('corr.outAt', { time: formatClock(r.check_out_time) })
+        : `${t('corr.inAt', { time: formatClock(r.check_in_time) })} · ${t('corr.outAt', { time: formatClock(r.check_out_time) })}`;
+      return row(`#${r.id} · ${nm(r)}`, [`${formatDate(r.work_date)} · ${t(`corr.k.${r.kind}`)}`, what, t('chg.reason', { r: r.reason }),
+        r.admin_comment ? t('req.ownerComment', { c: r.admin_comment }) : null],
         badge(t(`status.${r.status}`), { tone: tone(r.status), dot: true }), actions);
     });
   }

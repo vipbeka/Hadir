@@ -41,6 +41,15 @@ const ACTIONS: Record<string, [string, Role]> = {
   // live owner notifications (Telegram + in-app + device push)
   owner_alert_prefs: ["svc_owner_alert_prefs", "owner"], notify_status: ["svc_owner_notify_status", "owner"],
   notify_test: ["svc_owner_notify_test", "owner"], notify_log: ["svc_owner_notify_log", "owner"],
+  // staff tools: permissions, corrections, leave balance, change log, my pay
+  request_permission: ["svc_request_permission", "staff"], cancel_permission: ["svc_cancel_permission", "staff"],
+  request_correction: ["svc_request_correction", "staff"], cancel_correction: ["svc_cancel_correction", "staff"],
+  my_leave_balance: ["svc_my_leave_balance", "staff"], my_changes: ["svc_my_changes", "staff"], my_pay: ["svc_my_pay", "staff"],
+  // owner side of the same tools (every function re-checks the owner)
+  decide_permission: ["svc_decide_permission", "owner"], decide_correction: ["svc_decide_correction", "owner"],
+  employee_schedule: ["svc_employee_schedule", "owner"], save_employee_schedule: ["svc_save_employee_schedule", "owner"],
+  leave_balances: ["svc_leave_balances", "owner"], set_leave_balance: ["svc_set_leave_balance", "owner"],
+  employee_changes: ["svc_employee_changes", "owner"], staff_tools: ["svc_staff_tools", "owner"], save_staff_tools: ["svc_save_staff_tools", "owner"],
 };
 
 serve(async (req, body) => {

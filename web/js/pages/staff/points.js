@@ -12,6 +12,7 @@ import { button, setLoading } from '../../ui/button.js';
 import { input, select, setFieldError } from '../../ui/field.js';
 import { modal } from '../../ui/modal.js';
 import { toast } from '../../ui/toast.js';
+import { goalHint } from './home.js';
 
 export function eventRow(e) {
   const tone = e.color === 'green' ? 'point-green' : e.color === 'red' ? 'point-red' : 'point-black';
@@ -64,7 +65,7 @@ export async function renderStaffPoints(main, { me }) {
     ring.append(h('span', { class: 'ring__value num' }, `${g}/${th}`));
     fill(ringHost, ring, h('div', { class: 'pts-hero__text' },
       h('p', { class: 'pts-hero__title' }, t('reward.progress')),
-      h('p', { class: 'pts-hero__sub' }, g >= th ? t('reward.reached') : t('reward.remaining', { n: th - g })),
+      h('p', { class: 'pts-hero__sub' }, g >= th ? t('reward.reached') : goalHint(th - g, sum.work_days_left)),
       h('span', { class: 'pts-hero__chip' }, icon('gift', { size: 'sm' }), formatEGP(sum.reward_amount_piastres))));
     const rr = sum.reward_request;
     let rewardAction = null;

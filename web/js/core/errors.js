@@ -26,6 +26,8 @@ export function errorMessage(err) {
     distance: d.distance_m, radius: d.radius_m, accuracy: d.accuracy_m,
     time: d.closes_at ? formatClock(d.closes_at) : '',
     detail: typeof d === 'string' ? d : (err?.detail?.toString?.() ?? ''),
+    max: d.max_minutes, available: d.available, requested: d.requested, start: d.start ? formatClock(d.start) : '',
+    end: d.end ? formatClock(d.end) : '',
   });
   return msg === key ? t('error.generic') : msg;
 }

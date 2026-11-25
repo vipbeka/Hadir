@@ -9,7 +9,7 @@
  * - Web Push handlers are added in Step 5 (shift reminders).
  * Bump VERSION on every deploy that changes shell files.
  */
-const VERSION = 'zh-v14';
+const VERSION = 'zh-v15';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const PRECACHE = [
@@ -22,11 +22,11 @@ const PRECACHE = [
   './js/ui/icons.js', './js/ui/install.js', './js/ui/modal.js', './js/ui/prefs.js', './js/ui/push-card.js', './js/ui/toast.js', './js/ui/watch.js',
   './js/shell/nav.js', './js/shell/shell.js',
   './js/pages/account.js', './js/pages/login.js', './js/pages/placeholder.js', './js/pages/leaderboard.js',
-  './js/pages/staff/home.js', './js/pages/staff/attendance.js', './js/pages/staff/points.js', './js/pages/staff/requests.js',
+  './js/pages/staff/home.js', './js/pages/staff/attendance.js', './js/pages/staff/points.js', './js/pages/staff/requests.js', './js/pages/staff/statement.js', './js/ui/change-log.js',
   './js/pages/owner/employees.js', './js/pages/owner/dashboard.js', './js/pages/owner/approvals.js', './js/pages/owner/payroll.js', './js/pages/owner/payroll-export.js',
   './js/pages/owner/holidays.js', './js/pages/owner/settings.js', './js/pages/announcements.js',
   './js/pages/owner/docs.js', './js/pages/owner/payslip.js', './js/pages/owner/employee.js', './js/pages/owner/pay-actions.js', './js/pages/owner/delete-employee.js',
-  './js/pages/owner/notifications.js', './js/pages/owner/owner-alerts.js',
+  './js/pages/owner/notifications.js', './js/pages/owner/owner-alerts.js', './js/pages/owner/employee-tools.js', './js/pages/owner/staff-tools.js',
   './vendor/leaflet-1.9.4/leaflet.js', './vendor/leaflet-1.9.4/leaflet.css',
   './i18n/ar.json', './i18n/en.json',
   './vendor/supabase-js-2.119.2/supabase.js',

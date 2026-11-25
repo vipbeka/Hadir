@@ -23,7 +23,7 @@ export async function renderOwnerDashboard(main, { me }) {
       const d = await api('owner_dashboard');
       const tile = (label, n, tab) => card({ interactive: true, onClick: () => navigate(`/owner/approvals?${tab}`),
         body: stat({ label, value: String(n) }) });
-      const status = (e) => !e.today ? badge(t('od.absent'), { tone: 'neutral' })
+      const status = (e) => !e.today ? badge(t(e.day_off ? 'od.dayOff' : 'od.absent'), { tone: 'neutral' })
         : e.today.checked_out_at ? badge(t('od.out', { time: formatTime(e.today.checked_out_at) }), { tone: 'info' })
         : badge(t('od.present', { time: formatTime(e.today.checked_in_at) }), { tone: e.today.outcome === 'red' ? 'point-red' : 'success', dot: true });
       // today's operational view: active staff only; deactivated staff are
@@ -36,6 +36,7 @@ export async function renderOwnerDashboard(main, { me }) {
         h('div', { class: 'stats-grid' },
           tile(t('od.pendingBlack'), d.pending.black, 'black'), tile(t('od.pendingLeave'), d.pending.leave, 'leave'),
           tile(t('od.pendingEarly'), d.pending.early_leave, 'early'), tile(t('od.pendingReward'), d.pending.reward, 'reward'),
+          tile(t('od.pendingPermission'), d.pending.permission ?? 0, 'permission'), tile(t('od.pendingCorrection'), d.pending.correction ?? 0, 'correction'),
           tile(t('od.missing'), d.pending.missing_checkout, 'missing')),
         h('section', { class: 'section' }, h('div', { class: 'cluster', style: { 'justify-content': 'space-between' } }, h('h2', { class: 'section__title' }, t('od.team')), toggle),
           team.length ? table({ caption: t('od.team'), captionHidden: true, rows: team, columns: [

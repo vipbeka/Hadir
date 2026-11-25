@@ -22,6 +22,7 @@ import { renderStaffHome } from './pages/staff/home.js';
 import { renderAttendance } from './pages/staff/attendance.js';
 import { renderStaffPoints } from './pages/staff/points.js';
 import { renderStaffRequests } from './pages/staff/requests.js';
+import { renderStaffStatement } from './pages/staff/statement.js';
 import { renderLeaderboard } from './pages/leaderboard.js';
 import { renderOwnerDashboard } from './pages/owner/dashboard.js';
 import { renderApprovals } from './pages/owner/approvals.js';
@@ -49,6 +50,7 @@ const PAGES = {
   '/staff/points': renderStaffPoints,
   '/staff/leaderboard': renderLeaderboard,
   '/staff/requests': renderStaffRequests,
+  '/staff/statement': renderStaffStatement,
   '/staff/announcements': renderStaffAnnouncements,
   '/staff/account': renderAccount,
   '/owner/dashboard': renderOwnerDashboard,

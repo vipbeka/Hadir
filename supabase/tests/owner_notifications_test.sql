@@ -131,6 +131,8 @@ select pg_temp.ok((select payload ? 'id' and payload ->> 'kind' = 'early_leave_r
                    where channel = 'telegram' and event_type = 'early_leave_request' and subject_id = '00000000-0000-4000-c000-00000000000b'),
   'Telegram keeps the request id (approve/reject buttons)');
 select pg_temp.ok(pg_temp.push('00000000-0000-4000-c000-00000000000b') = 1, 'request push toggle off → no push, in-app + Telegram still sent');
+-- (a leave must include at least one work day: make both days work days)
+update public.day_rules set is_work_day = true where day_of_week in (extract(dow from (now() at time zone 'Africa/Cairo')::date + 2), extract(dow from (now() at time zone 'Africa/Cairo')::date + 3));
 select public.svc_request_leave('00000000-0000-4000-c000-00000000000c', jsonb_build_object('type', 'personal',
   'from_date', (now() at time zone 'Africa/Cairo')::date + 2, 'to_date', (now() at time zone 'Africa/Cairo')::date + 3, 'reason', 'سفر'));
 select pg_temp.ok((select body_ar like 'علي تجربة طلب إجازة (غياب) من % إلى % (2 يوم)، السبب: سفر%' from public.owner_notifications

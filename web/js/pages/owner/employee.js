@@ -13,10 +13,11 @@ import { card, alert, emptyState, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
 import { input, select, setFieldError } from '../../ui/field.js';
 import { toast } from '../../ui/toast.js';
-import { statementDoc, statementPdf, statementCsvRows, statementTotals, printDocs, dmy } from './docs.js';
+import { statementDoc, statementPdf, statementCsvRows, statementTotals, printDocs, dmy, allowanceLine } from './docs.js';
 import { csvBlob } from './payroll-export.js';
 import { offerPdf } from './payslip.js';
 import { deleteEmployeeFlow } from './delete-employee.js';
+import { renderEmployeeTools } from './employee-tools.js';
 
 const PAGE = 31;
 const cairoToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
@@ -92,14 +93,15 @@ export async function renderEmployee(main) {
       button({ label: t('st.next'), size: 'sm', disabled: page >= pages - 1, onClick: () => { page++; renderStatement(); } })) : null;
     fill(result,
       card({ title: t('st.totalsTitle', { from: dmy(st.from), to: dmy(st.to) }), body: [totals, h('h4', { class: 'card__subtitle' }, t('st.leaveTitle')), leave,
-        h('p', { class: 'text-sm text-muted' }, t('st.allowanceNot'))] }),
+        h('p', { class: 'text-sm text-muted' }, allowanceLine(st))] }),
       card({ body: [h('div', { class: 'cluster doc-toolbar' }, printBtn, pdfBtn, csvBtn), h('div', { class: 'cluster' }, months), status] }),
       h('div', { class: 'doc-preview doc-preview--wide' }, statementDoc(st, slice)), pager);
   }
   fFilter.addEventListener('change', () => { if (st) { page = 0; renderStatement(); } });
 
   fill(head, pageHeader({ iconName: 'user', title: t('emp.statement'), subtitle: '' }));
-  add(body, card({ title: t('st.title'), body: h('div', { class: 'form-grid' }, fMonth, fFrom, fTo, fFilter, h('div', { class: 'cluster' }, show)) }), result,
+  const tools = h('div', { class: 'stack' });
+  add(body, card({ title: t('st.title'), body: h('div', { class: 'form-grid' }, fMonth, fFrom, fTo, fFilter, h('div', { class: 'cluster' }, show)) }), result, tools,
     card({ title: t('del.section'), body: [h('p', { class: 'text-sm text-muted' }, t('del.sectionText')),
       button({ label: t('del.button'), variant: 'danger', icon: 'trash', onClick: async () => {
         const list = (await ownerEmployees('list')).employees || [];
@@ -107,5 +109,6 @@ export async function renderEmployee(main) {
         if (!emp) { toast({ title: t('err.not_found'), tone: 'danger' }); return; }
         deleteEmployeeFlow(emp, { onDeleted: () => navigate('/owner/employees', { replace: true }) });
       } })] }));
+  renderEmployeeTools(tools, id);
   load();
 }

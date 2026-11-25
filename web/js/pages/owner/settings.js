@@ -14,6 +14,7 @@ import { input, select, switchControl, setFieldError } from '../../ui/field.js';
 import { toast } from '../../ui/toast.js';
 import { icon } from '../../ui/icons.js';
 import { renderOwnerAlerts } from './owner-alerts.js';
+import { renderStaffTools } from './staff-tools.js';
 
 export async function renderSettings(main, ctx) {
   setDocumentTitle(t('set.title'));
@@ -150,6 +151,9 @@ export async function renderSettings(main, ctx) {
     const alertsSlot = h('div', { id: 'owner-alerts' });
     add(body, alertsSlot);
     renderOwnerAlerts(alertsSlot, { me: ctx?.me });
+    const toolsSlot = h('div', { id: 'staff-tools' });
+    add(body, toolsSlot);
+    renderStaffTools(toolsSlot);
     const reportsSlot = h('div', {});
     add(body, reportsSlot);
     renderReports(reportsSlot);

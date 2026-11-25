@@ -27,7 +27,13 @@ export const pointsBadges = pointCounters;
 export function rewardProgress(sum) {
   const g = Math.max(0, sum.period_totals.green), th = sum.threshold;
   return progress({ label: t('reward.progress'), value: Math.min(g, th), max: th, reward: true, valueText: `${g}/${th}`,
-    hint: g >= th ? t('reward.reached') : t('reward.remaining', { n: th - g }) });
+    hint: g >= th ? t('reward.reached') : goalHint(th - g, sum.work_days_left) });
+}
+
+/** «باقي لك N نقاط و M أيام عمل» — and whether it is still reachable this month. */
+export function goalHint(left, days) {
+  if (days == null) return t('reward.remaining', { n: left });
+  return t(left > days + 1 ? 'reward.remainingHard' : 'reward.remainingDays', { n: left, d: days });
 }
 
 const cairo = (opts, d = new Date()) => new Intl.DateTimeFormat(getLang() === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { timeZone: 'Africa/Cairo', ...opts }).format(d);
@@ -79,7 +85,7 @@ export async function renderStaffHome(main, { me, registerCleanup }) {
     // one status decision for the "today" card
     let st; let muted; let bold; let ico = 'clock'; let line = null; let action = null;
     if (day.holiday) { st = chip(t('home.stHoliday'), { tone: 'accent' }); ico = 'calendar'; muted = t('home.holiday', { name: getLang() === 'ar' ? day.holiday.name_ar : day.holiday.name_en }); bold = t('home.offTitle'); }
-    else if (!day.is_work_day) { st = chip(t('home.stOff'), { tone: 'neutral' }); ico = 'calendar'; muted = t('home.dayOff'); bold = t('home.offTitle'); }
+    else if (!day.is_work_day) { st = chip(t('home.stOff'), { tone: 'neutral' }); ico = 'calendar'; muted = t(day.day_off ? 'home.personalOff' : 'home.dayOff'); bold = t('home.offTitle'); }
     else if (a?.checked_out_at) {
       st = chip(t('home.stOut'), { tone: 'success', dot: true }); ico = 'checkCircle'; muted = t('home.outShort'); bold = t('home.outTitle');
       line = `${t('home.checkedInAt', { time: formatTime(a.checked_in_at) })} · ${t('home.checkedOutAt', { time: formatTime(a.checked_out_at) })}`;
@@ -110,6 +116,8 @@ export async function renderStaffHome(main, { me, registerCleanup }) {
         action),
       sum.pending_black > 0 ? alert(t('home.pendingBlack', { n: sum.pending_black }), { tone: 'warning' }) : null,
       day.missing_checkouts > 0 ? alert(t('home.missingCheckouts', { n: day.missing_checkouts }), { tone: 'info' }) : null,
+      ...(day.permissions || []).map((p) => alert(t(p.status === 'approved' ? 'home.permApproved' : 'home.permPending',
+        { from: formatClock(p.from_time), to: formatClock(p.to_time) }), { tone: p.status === 'approved' ? 'success' : 'info' })),
       h('div', { class: 'stat-pair' },
         h('section', { class: 'card mini-stat' },
           h('div', { class: 'mini-stat__head' }, h('span', { class: 'mini-stat__icon', 'aria-hidden': 'true' }, icon('calendarCheck')), h('span', {}, t('design.statDays'))),
@@ -128,7 +136,8 @@ export async function renderStaffHome(main, { me, registerCleanup }) {
           chipCount('black', sum.period_totals.black, t('points.black'))),
         h('a', { class: 'month-card__reward', href: '#/staff/points' },
           h('div', { class: 'month-card__reward-head' }, h('span', {}, icon('gift', { size: 'sm' }), t('reward.progress')), h('b', { class: 'num' }, `${g}/${th}`)),
-          progress({ label: t('reward.progress'), value: Math.min(g, th), max: th, reward: true, valueText: `${g}/${th}` }))),
+          progress({ label: t('reward.progress'), value: Math.min(g, th), max: th, reward: true, valueText: `${g}/${th}`,
+            hint: g >= th ? t('reward.reached') : goalHint(th - g, sum.work_days_left) }))),
       installBanner(), pushCard(me));
   } catch (err) {
     fill(body, emptyState({ iconName: 'alertTriangle', title: t('error.title'), text: errorMessage(err), error: true }));
