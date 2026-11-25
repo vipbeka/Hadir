@@ -48,7 +48,7 @@ img { block-size: auto; }
 
 input, button, textarea, select { font: inherit; color: inherit; letter-spacing: inherit; }
 /* iOS zooms into any field under 16px when it gets focus: keep fields at 16px+ on touch screens */
-@media (pointer: coarse) { input, textarea, select { font-size: max(1rem, 1em); } }
+@media (pointer: coarse) { input, textarea, select { font-size: max(var(--font-size-md), 1em); } }
 
 button { cursor: pointer; background: none; border: 0; padding: 0; }
 button:disabled { cursor: not-allowed; }
