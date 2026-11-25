@@ -126,6 +126,8 @@
 
 /* ---------- Approvals / tabs ---------- */
 .tabs { flex-wrap: wrap; inline-size: fit-content; max-inline-size: 100%; }
+/* many tabs (approvals: 9) wrap onto more lines instead of overflowing the phone */
+.segmented.tabs { display: flex; flex-wrap: wrap; justify-content: flex-start; }
 .tabs .segmented__btn { gap: var(--space-2); }
 .approval-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4); }
 
@@ -545,5 +547,19 @@ details > summary { cursor: pointer; }
 .sched-row__times { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sched-row__times > [hidden] { display: none; }
 .change-log .event-row__main { gap: var(--space-1); }
-/* 7 approval tiles: 4 + 3 on wide screens (never one tile alone on a row) */
-@media (min-width: 64rem) { .stats-grid > * { flex-basis: calc((100% - 3 * var(--space-4)) / 4); flex-grow: 0; } }
+/* 9 approval tiles: 3 × 3 on wide screens (never one tile alone on a row) */
+@media (min-width: 64rem) { .stats-grid > * { flex-basis: calc((100% - 2 * var(--space-4)) / 3); flex-grow: 0; } }
+
+/* ---------- Dashboard statistics ---------- */
+.stat-bars { inline-size: 100%; block-size: auto; max-block-size: 12rem; display: block; }
+.stat-bars__axis { stroke: var(--color-border-strong); stroke-width: 1; }
+.stat-bars__fill { fill: var(--color-primary); }
+.stat-bars__hit { fill: transparent; }
+.stat-bars__bar:hover .stat-bars__fill, .stat-bars__bar:focus-visible .stat-bars__fill { fill: var(--color-primary-hover); }
+.stat-bars__bar:focus-visible { outline: none; }
+.stat-bars__bar:focus-visible .stat-bars__hit { stroke: var(--focus-ring); stroke-width: 2; }
+.stat-bars__tick { fill: var(--color-text-muted); font-size: var(--font-size-xs); }
+.stat-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-4); }
+.stat-list { margin: 0; padding-inline-start: var(--space-5); display: flex; flex-direction: column; gap: var(--space-2); }
+.stat-list li { display: flex; flex-direction: column; }
+.selfie__preview { inline-size: 100%; max-block-size: 22rem; object-fit: cover; border-radius: var(--radius-lg); }

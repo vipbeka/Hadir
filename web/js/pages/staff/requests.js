@@ -7,7 +7,7 @@ import { t, setDocumentTitle } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
 import { sb } from '../../core/supabase.js';
 import { errorMessage } from '../../core/errors.js';
-import { formatDate, formatClock } from '../../core/format.js';
+import { formatDate, formatClock, formatEGP, monthLabel } from '../../core/format.js';
 import { pageHeader } from '../../shell/shell.js';
 import { card, badge, alert, emptyState, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
@@ -27,7 +27,8 @@ export async function renderStaffRequests(main, { me }) {
   const actions = h('div', { class: 'req-actions' },
     button({ label: t('req.newLeave'), variant: 'primary', icon: 'calendar', onClick: openLeave }),
     button({ label: t('perm.new'), variant: 'secondary', icon: 'clock', onClick: openPermission }),
-    button({ label: t('corr.new'), variant: 'secondary', icon: 'history', onClick: openCorrection }));
+    button({ label: t('corr.new'), variant: 'secondary', icon: 'history', onClick: openCorrection }),
+    button({ label: t('adv.new'), variant: 'secondary', icon: 'wallet', onClick: openAdvance }));
   const balanceSlot = h('div', {});
   const body = h('div', { class: 'stack' }, skeletonCard(t('common.loading')));
   add(main, actions, balanceSlot, body);
@@ -51,16 +52,18 @@ export async function renderStaffRequests(main, { me }) {
 
   async function load() {
     try {
-      const [lv, el, pm, cr] = await Promise.all([
+      const [lv, el, pm, cr, av] = await Promise.all([
         sb.from('leave_requests').select('*').eq('employee_id', me.id).order('created_at', { ascending: false }).limit(100),
         sb.from('early_leave_requests').select('*').eq('employee_id', me.id).order('created_at', { ascending: false }).limit(60),
         sb.from('permission_requests').select('*').eq('employee_id', me.id).order('created_at', { ascending: false }).limit(60),
-        sb.from('correction_requests').select('*').eq('employee_id', me.id).order('created_at', { ascending: false }).limit(60)]);
-      const bad = [lv, el, pm, cr].find((x) => x.error);
+        sb.from('correction_requests').select('*').eq('employee_id', me.id).order('created_at', { ascending: false }).limit(60),
+        sb.from('salary_advances').select('*').eq('employee_id', me.id).order('created_at', { ascending: false }).limit(40)]);
+      const bad = [lv, el, pm, cr, av].find((x) => x.error);
       if (bad) throw bad.error;
       const list = (rows, fn) => (rows.length ? h('ul', { class: 'event-list', role: 'list' }, rows.map(fn)) : h('p', { class: 'text-sm text-muted' }, t('req.empty')));
       fill(body,
         card({ title: t('perm.title'), body: list(pm.data, permRow) }),
+        card({ title: t('adv.title'), body: list(av.data, advRow) }),
         card({ title: t('corr.title'), body: list(cr.data, corrRow) }),
         card({ title: t('req.leave'), body: list(lv.data, leaveRow) }),
         card({ title: t('req.early'), body: list(el.data, (r) => h('li', { class: 'event-row' },
@@ -89,6 +92,31 @@ export async function renderStaffRequests(main, { me }) {
         r.reason ? h('span', { class: 'text-xs text-muted' }, r.reason) : null,
         r.admin_comment ? h('span', { class: 'text-xs text-muted' }, t('req.ownerComment', { c: r.admin_comment })) : null),
       canCancel ? cancelBtn('cancel_permission', r.id, range) : null);
+  }
+
+  function advRow(r) {
+    const progress = r.status === 'approved' ? advanceProgress(r) : null;
+    return h('li', { class: 'event-row' },
+      badge(t(`status.${r.status}`), { tone: tone(r.status), dot: true }),
+      h('div', { class: 'event-row__main' },
+        h('span', { class: 'num' }, `${formatEGP(r.amount_piastres)} · ${t('adv.installments', { n: r.installments })}`),
+        progress ? h('span', { class: 'text-xs text-muted' }, progress) : null,
+        r.reason ? h('span', { class: 'text-xs text-muted' }, r.reason) : null,
+        r.admin_comment ? h('span', { class: 'text-xs text-muted' }, t('req.ownerComment', { c: r.admin_comment })) : null),
+      r.status === 'pending' ? cancelBtn('cancel_advance', r.id, formatEGP(r.amount_piastres)) : null);
+  }
+
+  function openAdvance() {
+    const fAmount = input({ label: t('adv.amount'), type: 'number', required: true, attrs: { min: '1', step: '1', inputmode: 'numeric', dir: 'ltr' } });
+    const fN = select({ label: t('adv.installmentsLabel'), value: '1', options: Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: t('adv.installments', { n: i + 1 }) })) });
+    const fReason = textarea({ label: t('common.reason'), hint: t('common.optional'), rows: 2 });
+    requestDialog({ id: 'adv-form', title: t('adv.new'), intro: h('p', { class: 'text-sm text-muted' }, t('adv.intro')),
+      fields: [h('div', { class: 'form-grid' }, fAmount, fN), fReason], errorField: () => fAmount,
+      validate: () => {
+        const v = Number(val(fAmount));
+        if (!Number.isInteger(v) || v < 1 || v > 1000000) { setFieldError(fAmount, t('adv.errAmount')); return null; }
+        return { amount_egp: v, installments: Number(val(fN)), reason: val(fReason) };
+      }, send: 'request_advance' });
   }
 
   function corrRow(r) {
@@ -191,4 +219,14 @@ export async function renderStaffRequests(main, { me }) {
   }
 
   reload();
+}
+
+/** «القسط 2 من 3 — يبدأ نوفمبر 2026» for an approved advance. */
+export function advanceProgress(r) {
+  const now = cairoToday().slice(0, 7); const start = String(r.start_month).slice(0, 7);
+  const [y1, m1] = start.split('-').map(Number); const [y2, m2] = now.split('-').map(Number);
+  const k = (y2 - y1) * 12 + (m2 - m1);
+  if (k < 0) return t('adv.startsOn', { m: monthLabel(r.start_month) });
+  if (k >= r.installments) return t('adv.done');
+  return t('adv.progress', { i: k + 1, n: r.installments, m: monthLabel(r.start_month) });
 }

@@ -23,6 +23,7 @@ import { input, textarea, setFieldError } from '../../ui/field.js';
 import { toast } from '../../ui/toast.js';
 import { confirmDialog } from '../../ui/modal.js';
 import { icon } from '../../ui/icons.js';
+import { takeSelfie } from '../../ui/selfie.js';
 
 // Technical, adjustable settings.
 export const GEO_TIMEOUT_MS = 15000;        // give up waiting for a location fix after 15 s
@@ -205,7 +206,10 @@ export async function renderAttendance(main, { me, registerCleanup }) {
     const before = { in: att()?.checked_in_at || null, out: att()?.checked_out_at || null };
     try {
       const fix = await freshFix();
-      const r = await api(kind, { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy });
+      // the owner may require a selfie with the check-in (uploaded first, then checked by the server)
+      let selfie = null;
+      if (kind === 'check_in' && day.selfie_required) { selfie = await takeSelfie(me.id); if (!selfie) return; }
+      const r = await api(kind, { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, ...(selfie ? { selfie_path: selfie } : {}) });
       applySuccess(kind, r);
     } catch (err) {
       if (['timeout', 'network', 'offline', 'server_error'].includes(err?.code)) {

@@ -4,17 +4,18 @@ import { h, clear, add, fill } from '../../core/dom.js';
 import { t, setDocumentTitle, getLang } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
 import { errorMessage } from '../../core/errors.js';
-import { formatDate, formatDateTime, formatEGP, formatClock } from '../../core/format.js';
+import { formatDate, formatDateTime, formatEGP, formatClock, formatMinutes, monthLabel } from '../../core/format.js';
+import { advanceProgress } from '../staff/requests.js';
 import { pageHeader } from '../../shell/shell.js';
 import { card, badge, emptyState, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
-import { input, textarea, setFieldError } from '../../ui/field.js';
+import { input, select, textarea, setFieldError } from '../../ui/field.js';
 import { modal, confirmDialog } from '../../ui/modal.js';
 import { toast } from '../../ui/toast.js';
 import { store } from '../../core/storage.js';
 
 const nm = (r) => (getLang() === 'ar' ? r.name_ar : r.name_en);
-const TABS = ['black', 'leave', 'permission', 'correction', 'early', 'reward', 'missing'];
+const TABS = ['black', 'leave', 'permission', 'correction', 'advance', 'overtime', 'early', 'reward', 'missing'];
 const tone = (s) => ({ pending: 'warning', approved: 'success', paid: 'success', rejected: 'danger', cancelled: 'neutral' }[s] || 'neutral');
 
 export async function renderApprovals(main) {
@@ -47,11 +48,13 @@ export async function renderApprovals(main) {
       early: data.early_leave.filter((x) => x.status === 'pending').length,
       permission: (data.permission || []).filter((x) => x.status === 'pending').length,
       correction: (data.correction || []).filter((x) => x.status === 'pending').length,
+      advance: (data.advance || []).filter((x) => x.status === 'pending').length,
+      overtime: (data.overtime || []).filter((x) => x.status === 'pending').length,
       reward: data.reward.filter((x) => ['pending', 'approved'].includes(x.status)).length, missing: data.missing_checkout.length };
     tabs.replaceChildren(...TABS.map((k) => h('button', { type: 'button', class: 'segmented__btn', role: 'tab', 'aria-selected': String(tab === k), 'aria-pressed': String(tab === k),
       onClick: () => { tab = k; store.set('zh.apTab', k); render(); } }, t(`ap.${k}`), counts[k] ? h('span', { class: 'badge badge--accent num' }, String(counts[k])) : null)));
     clear(body);
-    const list = { black: blackList, leave: leaveList, permission: permissionList, correction: correctionList, early: earlyList, reward: rewardList, missing: missingList }[tab]();
+    const list = { black: blackList, leave: leaveList, permission: permissionList, correction: correctionList, advance: advanceList, overtime: overtimeList, early: earlyList, reward: rewardList, missing: missingList }[tab]();
     add(body, list.length ? h('div', { class: 'stack' }, list) : emptyState({ iconName: 'checkCircle', title: t('ap.empty') }));
   }
 
@@ -135,6 +138,68 @@ export async function renderApprovals(main) {
         : `${t('corr.inAt', { time: formatClock(r.check_in_time) })} · ${t('corr.outAt', { time: formatClock(r.check_out_time) })}`;
       return row(`#${r.id} · ${nm(r)}`, [`${formatDate(r.work_date)} · ${t(`corr.k.${r.kind}`)}`, what, t('chg.reason', { r: r.reason }),
         r.admin_comment ? t('req.ownerComment', { c: r.admin_comment }) : null],
+        badge(t(`status.${r.status}`), { tone: tone(r.status), dot: true }), actions);
+    });
+  }
+
+  function advanceList() {
+    return (data.advance || []).map((r) => {
+      const actions = [];
+      if (r.status === 'pending') {
+        const no = button({ label: t('common.reject'), size: 'sm', onClick: () => commentPrompt(t('adv.rejectTitle'), async (c) => {
+          try { await api('decide_advance', { id: r.id, approve: false, comment: c }); toast({ title: t('ap.decided'), tone: 'success' }); load(); }
+          catch (err) { toast({ title: t('error.title'), text: errorMessage(err), tone: 'danger' }); }
+        }) });
+        const yes = button({ label: t('common.approve'), variant: 'primary', size: 'sm', onClick: () => approveAdvance(r) });
+        actions.push(no, yes);
+      } else if (r.status === 'approved' && String(r.start_month) > new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date())) {
+        const stop = button({ label: t('adv.stop'), size: 'sm', onClick: () => act(stop, 'decide_advance', { id: r.id, approve: false, revoke: true }) });
+        actions.push(stop);
+      }
+      return row(`#${r.id} · ${nm(r)}`, [`${formatEGP(r.amount_piastres)} · ${t('adv.installments', { n: r.installments })}`,
+        r.status === 'approved' ? advanceProgress(r) : null, r.reason, r.admin_comment ? t('req.ownerComment', { c: r.admin_comment }) : null],
+        badge(t(`status.${r.status}`), { tone: tone(r.status), dot: true }), actions);
+    });
+  }
+
+  function approveAdvance(r) {
+    const now = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date()).slice(0, 7);
+    const months = Array.from({ length: 6 }, (_, i) => { const [y, m] = now.split('-').map(Number); return new Date(Date.UTC(y, m - 1 + i, 1)).toISOString().slice(0, 10); });
+    const fStart = select({ label: t('adv.startMonth'), options: months.map((v) => ({ value: v, label: monthLabel(v) })) });
+    const fN = select({ label: t('adv.installmentsLabel'), value: String(r.installments),
+      options: Array.from({ length: 24 }, (_, i) => ({ value: String(i + 1), label: t('adv.installments', { n: i + 1 }) })) });
+    const save = button({ label: t('common.approve'), variant: 'primary', onClick: async () => {
+      setLoading(save, true);
+      try { await api('decide_advance', { id: r.id, approve: true, start_month: fStart.querySelector('select').value, installments: Number(fN.querySelector('select').value) });
+        m.close(); toast({ title: t('ap.decided'), tone: 'success' }); load(); }
+      catch (err) { setLoading(save, false); setFieldError(fN, errorMessage(err)); }
+    } });
+    const m = modal({ title: `${t('adv.approveTitle')} — ${nm(r)}`, size: 'sm', body: [h('p', {}, formatEGP(r.amount_piastres)), fStart, fN],
+      actions: [button({ label: t('common.cancel'), onClick: () => m.close() }), save] });
+    m.open();
+  }
+
+  function overtimeList() {
+    return (data.overtime || []).map((r) => {
+      const actions = [];
+      if (r.status === 'pending') {
+        const no = button({ label: t('common.reject'), size: 'sm', onClick: () => act(no, 'decide_overtime', { id: r.id, approve: false }) });
+        const yes = button({ label: t('common.approve'), variant: 'primary', size: 'sm', onClick: () => {
+          const f = input({ label: t('ot.minutes'), type: 'number', value: String(r.minutes), attrs: { min: '1', max: '1440', dir: 'ltr', inputmode: 'numeric' } });
+          const save = button({ label: t('common.approve'), variant: 'primary', onClick: async () => {
+            const v = Number(f.querySelector('input').value);
+            if (!Number.isInteger(v) || v < 1 || v > 1440) { setFieldError(f, t('err.invalid_value')); return; }
+            setLoading(save, true);
+            try { await api('decide_overtime', { id: r.id, approve: true, minutes: v }); m.close(); toast({ title: t('ap.decided'), tone: 'success' }); load(); }
+            catch (err) { setLoading(save, false); setFieldError(f, errorMessage(err)); }
+          } });
+          const m = modal({ title: `${t('ot.approveTitle')} — ${nm(r)}`, size: 'sm', body: [h('p', { class: 'text-sm text-muted' }, t('ot.rateNote', { rate: formatEGP(r.rate_piastres) })), f],
+            actions: [button({ label: t('common.cancel'), onClick: () => m.close() }), save] });
+          m.open();
+        } });
+        actions.push(no, yes);
+      }
+      return row(nm(r), [`${formatDate(r.work_date)} · ${formatMinutes(r.minutes)}`, formatEGP(r.amount_piastres)],
         badge(t(`status.${r.status}`), { tone: tone(r.status), dot: true }), actions);
     });
   }

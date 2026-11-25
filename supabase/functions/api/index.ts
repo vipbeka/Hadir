@@ -50,6 +50,10 @@ const ACTIONS: Record<string, [string, Role]> = {
   employee_schedule: ["svc_employee_schedule", "owner"], save_employee_schedule: ["svc_save_employee_schedule", "owner"],
   leave_balances: ["svc_leave_balances", "owner"], set_leave_balance: ["svc_set_leave_balance", "owner"],
   employee_changes: ["svc_employee_changes", "owner"], staff_tools: ["svc_staff_tools", "owner"], save_staff_tools: ["svc_save_staff_tools", "owner"],
+  // advances, overtime, backup, dashboard statistics
+  request_advance: ["svc_request_advance", "staff"], cancel_advance: ["svc_cancel_advance", "staff"],
+  decide_advance: ["svc_decide_advance", "owner"], create_advance: ["svc_create_advance", "owner"], decide_overtime: ["svc_decide_overtime", "owner"],
+  backup_export: ["svc_backup_export", "owner"], dashboard_stats: ["svc_dashboard_stats", "owner"],
 };
 
 serve(async (req, body) => {

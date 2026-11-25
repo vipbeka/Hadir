@@ -29,9 +29,13 @@ export function slipIdentity(slip) {
 export function payslipLines(data) {
   const e = data.entitlement;
   const earn = [[t('pay.base'), e.base_piastres == null ? null : e.base_piastres, e.base_piastres == null ? t('pay.salaryMissing') : '']];
-  for (const r of e.earnings) earn.push([t('ps.reward'), r.amount_piastres, t(`ps.rewardSt.${r.status}`)]);
-  const ded = e.deductions.map((d) => [t(d.kind === 'red' ? 'ps.dedRed' : 'ps.dedBlack'), d.amount_piastres,
-    t('ps.times', { n: d.count, rate: formatEGP(d.rate_piastres) })]);
+  for (const r of e.earnings) {
+    if (r.kind === 'overtime') earn.push([t('ps.overtime'), r.amount_piastres, `${dmy(r.date)} · ${formatMinutes(r.minutes)}`]);
+    else earn.push([t('ps.reward'), r.amount_piastres, t(`ps.rewardSt.${r.status}`)]);
+  }
+  const ded = e.deductions.map((d) => (d.kind === 'advance'
+    ? [t('ps.advance'), d.amount_piastres, t('ps.installment', { i: d.installment, n: d.installments })]
+    : [t(d.kind === 'red' ? 'ps.dedRed' : 'ps.dedBlack'), d.amount_piastres, t('ps.times', { n: d.count, rate: formatEGP(d.rate_piastres) })]));
   return { earn, ded };
 }
 

@@ -53,6 +53,20 @@ async function verifyOwnerChat() {
   await rpc("svc_owner_chat_verified", { p_chat: chat, p_type: type });
 }
 
+/** Send a file (multipart) to a chat. The token never leaves this function. */
+async function sendDocument(chatId: string, filename: string, content: string, caption: string): Promise<Record<string, unknown>> {
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
+  if (token.length <= 20) return { ok: false, description: "missing_token", error_code: 0 };
+  const form = new FormData();
+  form.append("chat_id", chatId);
+  form.append("caption", caption.slice(0, 1000));
+  form.append("document", new Blob([content], { type: "application/json" }), filename);
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: "POST", body: form });
+  const json = await res.json().catch(() => ({ ok: false, description: `http_${res.status}` })) as Record<string, unknown>;
+  if (!json.ok && json.error_code === undefined) json.error_code = res.status;
+  return json;
+}
+
 /** Telegram outcome → outbox result (rules in classifySend). */
 async function report(id: string, res: Record<string, unknown> | null, err?: unknown) {
   const o = classifySend(res, err);
@@ -87,6 +101,17 @@ serve(async (req) => {
           }
           let res: Record<string, unknown> | null = null; let err: unknown;
           try { res = await tg("sendMessage", { chat_id: part.chat_id, text: part.text, disable_web_page_preview: true }); } catch (e) { err = e; }
+          if (res?.ok) sent++; else failed++;
+          await report(r.id, res, err);
+        } else if (r.channel === "telegram" && r.event_type === "owner_backup") {
+          // weekly backup: built at send time (never stored in the outbox), sent as a file to the verified private chat
+          let res: Record<string, unknown> | null = null; let err: unknown;
+          try {
+            const data = await rpc<Record<string, unknown>>("svc_backup_data");
+            const day = String(r.payload.date ?? "").slice(0, 10);
+            res = await sendDocument(r.recipient, `hadir-backup-${day}.json`, JSON.stringify(data),
+              `💾 نسخة احتياطية أسبوعية — ${day}\nكل بيانات حاضر (الموظفين، الحضور، النقاط، الطلبات، الرواتب). احتفظ بالملف في مكان آمن.`);
+          } catch (e) { err = e; }
           if (res?.ok) sent++; else failed++;
           await report(r.id, res, err);
         } else if (r.channel === "telegram" && r.event_type === "telegram_delete") {

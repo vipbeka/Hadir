@@ -37,6 +37,8 @@ export async function renderStaffStatement(main) {
         summary.push(kv(t('mys.base'), p.base_piastres == null ? t('mys.noSalary') : formatEGP(p.base_piastres)));
       }
       summary.push(kv(t('mys.deductions'), formatEGP(p.deductions_piastres)), kv(t('mys.rewards'), formatEGP(p.earnings_piastres)));
+      for (const d of p.deductions || []) if (d.kind === 'advance') summary.push(kv(t('ps.installment', { i: d.installment, n: d.installments }) + ` · ${t('ps.advance')}`, `− ${formatEGP(d.amount_piastres)}`));
+      for (const r of p.earnings || []) if (r.kind === 'overtime') summary.push(kv(`${t('ps.overtime')} · ${formatDate(r.date)} (${formatMinutes(r.minutes)})`, `+ ${formatEGP(r.amount_piastres)}`));
       if (p.pending_rewards_piastres) summary.push(kv(t('mys.pendingRewards'), formatEGP(p.pending_rewards_piastres)));
       if (p.pay_visible && p.net_piastres != null) {
         summary.push(kv(p.is_current ? t('mys.netExpected') : t('mys.net'), formatEGP(p.net_piastres), true));

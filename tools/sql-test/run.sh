@@ -26,6 +26,7 @@ echo "== owner report tests"; { echo "begin;"; cat "$ROOT/supabase/tests/owner_r
 echo "== payroll tests"; { echo "begin;"; cat "$ROOT/supabase/tests/payroll_test.sql"; echo "rollback;"; } | "${PSQL[@]}" 2>&1 | grep -E "ok:|PASSED|FAILED|ERROR" | sed 's/^NOTICE:  //'
 echo "== owner notification tests"; { echo "begin;"; cat "$ROOT/supabase/tests/owner_notifications_test.sql"; echo "rollback;"; } | "${PSQL[@]}" 2>&1 | grep -E "ok:|PASSED|FAILED|ERROR" | sed 's/^NOTICE:  //'
 echo "== staff tools tests"; { echo "begin;"; cat "$ROOT/supabase/tests/staff_tools_test.sql"; echo "rollback;"; } | "${PSQL[@]}" 2>&1 | grep -E "ok:|PASSED|FAILED|ERROR" | sed 's/^NOTICE:  //'
+echo "== payroll extras tests"; { echo "begin;"; cat "$ROOT/supabase/tests/payroll_extras_test.sql"; echo "rollback;"; } | "${PSQL[@]}" 2>&1 | grep -E "ok:|PASSED|FAILED|ERROR" | sed 's/^NOTICE:  //'
 echo "== rollback"; down
 "${PSQL[@]}" -tAc "select 'tables left in public: ' || count(*) from information_schema.tables where table_schema='public'"
 echo "== re-apply"; up

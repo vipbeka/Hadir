@@ -9,6 +9,8 @@ import { card, stat, badge, table, emptyState, skeletonCard } from '../../ui/dis
 import { button } from '../../ui/button.js';
 import { installBanner } from '../../ui/install.js';
 import { pushCard } from '../../ui/push-card.js';
+import { selfieSwitch, renderStats } from './dashboard-extras.js';
+import { showSelfie } from '../../ui/selfie.js';
 import { navigate } from '../../core/router.js';
 
 export async function renderOwnerDashboard(main, { me }) {
@@ -37,12 +39,14 @@ export async function renderOwnerDashboard(main, { me }) {
           tile(t('od.pendingBlack'), d.pending.black, 'black'), tile(t('od.pendingLeave'), d.pending.leave, 'leave'),
           tile(t('od.pendingEarly'), d.pending.early_leave, 'early'), tile(t('od.pendingReward'), d.pending.reward, 'reward'),
           tile(t('od.pendingPermission'), d.pending.permission ?? 0, 'permission'), tile(t('od.pendingCorrection'), d.pending.correction ?? 0, 'correction'),
+          tile(t('od.pendingAdvance'), d.pending.advance ?? 0, 'advance'), tile(t('od.pendingOvertime'), d.pending.overtime ?? 0, 'overtime'),
           tile(t('od.missing'), d.pending.missing_checkout, 'missing')),
         h('section', { class: 'section' }, h('div', { class: 'cluster', style: { 'justify-content': 'space-between' } }, h('h2', { class: 'section__title' }, t('od.team')), toggle),
           team.length ? table({ caption: t('od.team'), captionHidden: true, rows: team, columns: [
             { key: 'n', label: t('emp.colName'), render: (e) => h('span', { class: 'name-cell' }, h('strong', {}, displayName(e)), jobTitle(e) ? h('span', { class: 'name-cell__alt' }, jobTitle(e)) : null,
               e.active ? null : badge(t('emp.inactive'), { tone: 'neutral' })) },
-            { key: 's', label: t('home.today'), render: status },
+            { key: 's', label: t('home.today'), render: (e) => e.today?.selfie_path ? h('span', { class: 'cluster cluster--sm' }, status(e),
+                button({ label: t('selfie.view'), size: 'sm', variant: 'ghost', icon: 'eye', iconOnly: true, onClick: () => showSelfie(e.today.selfie_path, displayName(e)) })) : status(e) },
             { key: 'g', label: t('points.green'), numeric: true, render: (e) => badge(String(e.green), { tone: 'point-green', dot: true }) },
             { key: 'r', label: t('points.red'), numeric: true, render: (e) => badge(String(e.red), { tone: 'point-red', dot: true }) },
             { key: 'b', label: t('points.black'), numeric: true, render: (e) => h('span', { class: 'cluster cluster--sm' }, badge(String(e.black), { tone: 'point-black', dot: true }),
@@ -50,6 +54,9 @@ export async function renderOwnerDashboard(main, { me }) {
             { key: 'sal', label: t('od.salary'), numeric: true, render: (e) => e.monthly_salary_piastres == null
               ? h('a', { href: '#/owner/employees' }, t('od.salaryNotSet')) : h('span', { class: 'num' }, formatEGP(e.monthly_salary_piastres)) },
           ] }) : emptyState({ iconName: 'users', title: t('od.noStaff'), action: button({ label: t('emp.add'), variant: 'primary', onClick: () => navigate('/owner/employees') }) })));
+      const statsSlot = h('div', {});
+      add(body, selfieSwitch(d.selfie_required), statsSlot);
+      renderStats(statsSlot);
     } catch (err) { fill(body, emptyState({ iconName: 'alertTriangle', title: t('error.title'), text: errorMessage(err), error: true })); }
   }
   let showInactive = false;

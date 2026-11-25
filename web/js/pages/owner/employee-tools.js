@@ -5,8 +5,10 @@ import { h, fill } from '../../core/dom.js';
 import { t, getLang } from '../../core/i18n.js';
 import { api } from '../../core/api.js';
 import { errorMessage } from '../../core/errors.js';
-import { formatClock } from '../../core/format.js';
-import { card, alert, skeletonCard } from '../../ui/display.js';
+import { formatClock, formatEGP, monthLabel } from '../../core/format.js';
+import { sb } from '../../core/supabase.js';
+import { advanceProgress } from '../staff/requests.js';
+import { card, alert, badge, skeletonCard } from '../../ui/display.js';
 import { button, setLoading } from '../../ui/button.js';
 import { input, select, textarea, switchControl, setFieldError } from '../../ui/field.js';
 import { toast } from '../../ui/toast.js';
@@ -22,9 +24,11 @@ export function renderEmployeeTools(slot, employeeId) {
   const sched = h('div', {}, skeletonCard(t('common.loading')));
   const bal = h('div', {}, skeletonCard(t('common.loading')));
   const log = h('div', {}, skeletonCard(t('common.loading')));
+  const adv = h('div', {}, skeletonCard(t('common.loading')));
   fill(slot,
     card({ title: t('sch.title'), subtitle: t('sch.subtitle'), iconName: 'calendar', body: sched }),
     card({ title: t('bal.ownerTitle'), iconName: 'calendarCheck', body: bal }),
+    card({ title: t('adv.title'), iconName: 'wallet', body: adv }),
     card({ title: t('chg.title'), subtitle: t('chg.ownerSubtitle'), iconName: 'history', body: h('details', {
       onToggle: (e) => { if (e.target.open && !log.dataset.loaded) loadLog(); } }, h('summary', {}, t('chg.show')), log) }));
 
@@ -110,5 +114,33 @@ export function renderEmployeeTools(slot, employeeId) {
     catch (err) { fill(log, alert(errorMessage(err), { tone: 'danger' })); log.dataset.loaded = ''; }
   }
 
-  loadSchedule(); loadBalance();
+  // ---------------------------------------------------------- advances
+  async function loadAdvances() {
+    const { data, error } = await sb.from('salary_advances').select('*').eq('employee_id', employeeId).order('created_at', { ascending: false }).limit(20);
+    if (error) { fill(adv, alert(errorMessage(error), { tone: 'danger' })); return; }
+    const now = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date()).slice(0, 7);
+    const months = Array.from({ length: 6 }, (_, i) => { const [y, m] = now.split('-').map(Number); return new Date(Date.UTC(y, m - 1 + i, 1)).toISOString().slice(0, 10); });
+    const fAmt = input({ label: t('adv.amount'), type: 'number', attrs: { min: '1', step: '1', inputmode: 'numeric', dir: 'ltr' } });
+    const fN = select({ label: t('adv.installmentsLabel'), value: '1', options: Array.from({ length: 24 }, (_, i) => ({ value: String(i + 1), label: t('adv.installments', { n: i + 1 }) })) });
+    const fStart = select({ label: t('adv.startMonth'), options: months.map((v) => ({ value: v, label: monthLabel(v) })) });
+    const fReason = input({ label: t('common.reason'), hint: t('common.optional'), attrs: { maxlength: '200' } });
+    const save = button({ label: t('adv.record'), variant: 'primary', onClick: async () => {
+      const v = Number(fAmt.querySelector('input').value);
+      if (!Number.isInteger(v) || v < 1 || v > 1000000) { setFieldError(fAmt, t('adv.errAmount')); return; }
+      setFieldError(fAmt, null); setLoading(save, true);
+      try {
+        await api('create_advance', { employee_id: employeeId, amount_egp: v, installments: Number(fN.querySelector('select').value),
+          start_month: fStart.querySelector('select').value, reason: fReason.querySelector('input').value });
+        toast({ title: t('set.saved'), tone: 'success' }); reloadLog(); loadAdvances();
+      } catch (err) { setFieldError(fAmt, errorMessage(err)); setLoading(save, false); }
+    } });
+    const rows = (data || []).map((r) => h('li', { class: 'event-row' }, badge(t(`status.${r.status}`), { tone: { approved: 'success', pending: 'warning', rejected: 'danger' }[r.status] || 'neutral', dot: true }),
+      h('div', { class: 'event-row__main' }, h('span', { class: 'num' }, `${formatEGP(r.amount_piastres)} · ${t('adv.installments', { n: r.installments })}`),
+        r.status === 'approved' ? h('span', { class: 'text-xs text-muted' }, advanceProgress(r)) : null,
+        r.reason ? h('span', { class: 'text-xs text-muted' }, r.reason) : null)));
+    fill(adv, h('div', { class: 'stack' }, rows.length ? h('ul', { class: 'event-list', role: 'list' }, rows) : h('p', { class: 'text-sm text-muted' }, t('adv.none')),
+      h('p', { class: 'text-sm text-muted' }, t('adv.ownerHint')), h('div', { class: 'form-grid' }, fAmt, fN, fStart, fReason), h('div', { class: 'cluster' }, save)));
+  }
+
+  loadSchedule(); loadBalance(); loadAdvances();
 }

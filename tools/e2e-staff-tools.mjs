@@ -41,7 +41,7 @@ for (const scheme of ['light', 'dark']) {
     await page.goto(`${base}/index.html#/staff/requests`);
     await page.waitForSelector('.balance-row');
     check(/16/.test(await page.locator('.balance-row__value').textContent()), `[${scheme}] leave balance shows 16 available`);
-    check(await page.locator('.req-actions button').count() === 3, `[${scheme}] three request buttons (leave / permission / correction)`);
+    check(await page.locator('.req-actions button').count() === 4, `[${scheme}] four request buttons (leave / permission / correction / advance)`);
 
     // permission: validation, then 3 requests (3rd over the limit), cancel one
     await page.getByRole('button', { name: 'طلب إذن' }).click();
@@ -154,7 +154,7 @@ for (const scheme of ['light', 'dark']) {
     await page.waitForFunction(() => document.querySelectorAll('.toast').length >= 1);
     await page.waitForTimeout(200);
     check(state.decisions.some((d) => d.action === 'decide_correction' && d.approve === false && d.comment === 'مش موجود في الكاميرا'), `[${scheme}] correction rejected with a reason`);
-    check(await noOverflow(page), `[${scheme}] approvals (7 tabs): no horizontal overflow`);
+    check(await noOverflow(page), `[${scheme}] approvals (9 tabs): no horizontal overflow`);
     if (shots) await page.screenshot({ path: `${shots}/tools-approvals-${scheme}.png`, fullPage: true });
 
     // employee page: schedule, balance, change log
