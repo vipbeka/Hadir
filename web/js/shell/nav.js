@@ -1,16 +1,15 @@
 // Navigation trees. Staff and owner are separate experiences with
 // separate route prefixes (/staff/*, /owner/*); no shared role switch.
-// `bottom` items appear in the floating bottom bar (max 4). Every item is
+// `bottom` items appear in the floating bottom bar (staff 6, owner 3 + «المزيد»). Every item is
 // listed in the side panel opened by the hamburger.
 export const STAFF_NAV = [
   { path: '/staff/home', labelKey: 'nav.home', icon: 'home', bottom: true },
   { path: '/staff/attendance', labelKey: 'nav.checkIn', icon: 'mapPin', bottom: true },
   { path: '/staff/points', labelKey: 'nav.points', icon: 'star', bottom: true },
-  // the 4th tab «المزيد» opens the leaderboard (as in the reference design)
-  { path: '/staff/leaderboard', labelKey: 'nav.leaderboard', icon: 'trophy', bottom: true, bottomLabelKey: 'common.more', bottomIcon: 'moreHorizontal' },
-  { path: '/staff/requests', labelKey: 'nav.requests', icon: 'inbox' },
-  { path: '/staff/statement', labelKey: 'nav.myStatement', icon: 'fileText' },
-  { path: '/staff/announcements', labelKey: 'nav.announcements', icon: 'bell' },
+  { path: '/staff/requests', labelKey: 'nav.requests', icon: 'inbox', bottom: true },
+  { path: '/staff/announcements', labelKey: 'nav.announcements', icon: 'bell', bottom: true },
+  { path: '/staff/statement', labelKey: 'nav.myStatement', icon: 'fileText', bottom: true, bottomLabelKey: 'nav.statementShort' },
+  { path: '/staff/leaderboard', labelKey: 'nav.leaderboard', icon: 'trophy' },
   { path: '/staff/account', labelKey: 'nav.account', icon: 'user' },
 ];
 

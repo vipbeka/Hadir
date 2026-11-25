@@ -92,11 +92,11 @@ export function renderShell(root, { nav, currentPath, user, onSignOut, role }) {
   if (badge) bindBadge(badge);
 
   // ----- floating bottom bar (4 tabs; «المزيد» opens the panel if no 4th tab) -----
-  const bottomItems = nav.filter((i) => i.bottom).slice(0, 4);
+  const bottomItems = nav.filter((i) => i.bottom).slice(0, 6);
   const bottomPaths = new Set(bottomItems.map((i) => i.path));
   const here = currentPath.split('?')[0];
   const bottombar = h('nav', { class: 'bottombar', 'aria-label': t('nav.primary') },
-    h('div', { class: 'bottombar__inner' },
+    h('div', { class: ['bottombar__inner', bottomItems.length > 4 && 'bottombar__inner--dense'] },
       bottomItems.map((i) => navLink(i, currentPath, 'bottombar__link', { labelKey: i.bottomLabelKey, iconName: i.bottomIcon })),
       bottomItems.length < 4 ? h('button', {
         type: 'button', class: 'bottombar__link', onClick: openDrawer,

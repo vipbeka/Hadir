@@ -438,3 +438,7 @@ body[data-role="owner"] { --col-width: 64rem; }
 .alert-grid .switch > span:last-child { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .notify-status { display: flex; flex-direction: column; gap: var(--space-2); }
 .notify-log { font-size: var(--font-size-xs); }
+/* 6 tabs (staff): tighter icon pills and labels so every label fits at 320px */
+.bottombar__inner--dense { max-inline-size: 34rem; padding-inline: var(--space-1); }
+.bottombar__inner--dense .bottombar__link { padding-inline: 0; }
+.bottombar__inner--dense .bottombar__link-icon { inline-size: 2.25rem; }

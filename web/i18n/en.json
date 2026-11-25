@@ -1284,5 +1284,6 @@
   "err.invalid_value": "Invalid value.",
   "mys.src.late": "Late check-in",
   "mys.src.absence": "Absent without approved leave",
-  "mys.src.owner": "By the owner"
+  "mys.src.owner": "By the owner",
+  "nav.statementShort": "Statement"
 }

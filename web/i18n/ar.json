@@ -1284,5 +1284,6 @@
   "err.invalid_value": "القيمة غير مقبولة.",
   "mys.src.late": "تأخير في تسجيل الحضور",
   "mys.src.absence": "غياب بدون إجازة معتمدة",
-  "mys.src.owner": "بواسطة صاحب العمل"
+  "mys.src.owner": "بواسطة صاحب العمل",
+  "nav.statementShort": "الكشف"
 }

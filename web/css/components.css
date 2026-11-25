@@ -714,3 +714,7 @@ a.tip-row:hover { background: var(--color-primary-subtle); text-decoration: none
 .hint-line .icon { inline-size: var(--icon-size-sm); block-size: var(--icon-size-sm); flex: none; }
 @media (max-width: 399px) { .stat-card__value { font-size: var(--font-size-xl); } }
 @media (max-width: 339px) { .stat-pair { grid-template-columns: 1fr; } }
+/* the region is a manual popover (top layer, above open dialogs): drop the UA popover box */
+.toast-region[popover] { margin: 0; padding: 0; border: 0; background: transparent; color: inherit; overflow: visible;
+  inline-size: auto; block-size: auto; inset-block-start: auto; }
+@media (min-width: 768px) { .toast-region[popover] { inline-size: 24rem; } }
