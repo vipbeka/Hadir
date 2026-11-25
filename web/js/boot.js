@@ -20,3 +20,13 @@
   var dark = pref === 'dark' || (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   root.setAttribute('data-theme', dark ? 'dark' : 'light');
 })();
+
+/* Fixed scale like a native app. iOS Safari ignores user-scalable=no, so
+ * its pinch gesture is blocked here; double-tap zoom is off via CSS
+ * touch-action. The map is left alone: Leaflet zooms it itself. */
+(function () {
+  var onMap = function (e) { return e.target && e.target.closest && e.target.closest('.leaflet-container'); };
+  var stop = function (e) { if (!onMap(e)) e.preventDefault(); };
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (n) { document.addEventListener(n, stop, { passive: false }); });
+  document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1 && !onMap(e)) e.preventDefault(); }, { passive: false });
+})();

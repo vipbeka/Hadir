@@ -13,6 +13,9 @@ html {
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
+  /* fixed scale like a native app: no double-tap or pinch zoom of the page
+     (the attendance map keeps its own pinch zoom — Leaflet handles it in JS) */
+  touch-action: pan-x pan-y;
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
@@ -44,6 +47,8 @@ img, picture, svg, video, canvas { display: block; max-inline-size: 100%; }
 img { block-size: auto; }
 
 input, button, textarea, select { font: inherit; color: inherit; letter-spacing: inherit; }
+/* iOS zooms into any field under 16px when it gets focus: keep fields at 16px+ on touch screens */
+@media (pointer: coarse) { input, textarea, select { font-size: max(1rem, 1em); } }
 
 button { cursor: pointer; background: none; border: 0; padding: 0; }
 button:disabled { cursor: not-allowed; }
